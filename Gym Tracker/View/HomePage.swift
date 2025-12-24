@@ -24,7 +24,18 @@ enum Tab{
 struct HomePage: View {
     @State private var activeTab: Tab = .workout
     @State private var showingAddWorkout = false
-    @Query(sort: \Exercise.name) private var storedExercises: [Exercise]
+    
+    static var todayStart: Date {
+            Calendar.current.startOfDay(for: .now)
+        }
+        
+    static var tomorrowStart: Date {
+        Calendar.current.date(byAdding: .day, value: 1, to: todayStart)!
+    }
+    
+    @Query(filter: #Predicate<Exercise> { exercise in
+        exercise.date >= todayStart && exercise.date < tomorrowStart
+    }, sort: \Exercise.date) private var storedExercises: [Exercise]
     
     var body: some View {
         NavigationStack{

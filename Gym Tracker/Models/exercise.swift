@@ -8,6 +8,8 @@
 import SwiftData
 import Foundation
 
+let workoutCategories = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Cardio"]
+
 @Model
 class Exercise{
     var id: UUID = UUID()
@@ -46,10 +48,13 @@ class ExerciseSet {
 class WorkoutOption {
     var id: UUID = UUID()
     var name: String
+    var category: String
     var image: String
     
-    init(name: String, image: String) {
+    init(name: String, category: String, image: String) {
         self.name = name
         self.image = image
+        self.category = category
     }
 }
+

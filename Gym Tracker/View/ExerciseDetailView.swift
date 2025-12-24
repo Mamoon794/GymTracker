@@ -7,6 +7,8 @@ struct ExerciseDetailView: View {
     
     @State private var newReps: String = ""
     @State private var newWeight: String = ""
+    @State private var useKg: Bool = false
+    @State private var isBarbell: Bool = false
 
     var body: some View {
         List {
@@ -23,14 +25,33 @@ struct ExerciseDetailView: View {
             
 
             Section(header: Text("Add Set")) {
-                HStack {
-                    TextField("Reps", text: $newReps)
-                        .keyboardType(.numberPad)
-                    TextField("Weight (kg)", text: $newWeight)
-                        .keyboardType(.decimalPad)
-                    Button("Add") { addSet() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!canAdd)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        TextField("Reps", text: $newReps).keyboardType(.numberPad)
+                        TextField(useKg ? "Weight (kg)" : "Weight (lbs)", text: $newWeight).keyboardType(.decimalPad)
+                    }
+
+                    HStack(spacing: 20) {
+                        // Toggle for Lbs vs Kg
+                        Toggle("Use KG", isOn: $useKg).labelsHidden()
+                        Text(useKg ? "KG" : "LB").font(.caption).bold()
+
+                        Divider().frame(height: 20)
+
+                        // The "Tick Mark" for Barbell formula
+                        Toggle(isOn: $isBarbell) {
+                            Label("Is Barbell Weight", systemImage: "dumbbell.fill")
+                        }
+                        .toggleStyle(.button)
+                        .tint(.emerald500)
+                    }
+
+                    Button(action: addSet) {
+                        Text("Add Set")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canAdd)
                 }
             }
         }
@@ -49,7 +70,15 @@ struct ExerciseDetailView: View {
     }
 
     private func addSet() {
-        guard let reps = Int(newReps), let weight = Double(newWeight) else { return }
+        guard let reps = Int(newReps), var weight = Double(newWeight) else { return }
+        
+        if useKg{
+            weight = weight * 2.205
+        }
+        if isBarbell{
+            weight = (weight * 2) + 45
+        }
+        
         let newSet = ExerciseSet(reps: reps, weight: weight)
         exercise.sets.append(newSet)
         
@@ -85,15 +114,19 @@ struct ExerciseRow: View {
             
             Spacer()
             
-            Text("\(set.weight, specifier: "%.1f") kg")
+            Text("\(set.weight, specifier: "%.1f") lbs")
                 .foregroundStyle(.secondary)
                 .padding(.leading, 8)
                 .contextMenu {
-                    Button("+2.5 kg") { set.weight += 2.5 }
-                    Button("+5 kg") { set.weight += 5 }
+                    Button("+2.5 lbs") { set.weight += 2.5 }
+                    Button("+5 lbs") { set.weight += 5 }
                     Button("Reset weight") { set.weight = 0 }
                 }
         }
     }
 }
 
+
+#Preview{
+    ExerciseDetailView(exercise: Exercise(name: "Test", imageName: "figure.strengthtraining.traditional"))
+}
