@@ -15,7 +15,7 @@ extension Color {
       static let slate400   = Color(red: 0.56, green: 0.60, blue: 0.67)
       static let slate800   = Color(red: 0.12, green: 0.14, blue: 0.18)
       static let slate300   = Color(red: 0.69, green: 0.73, blue: 0.78)
-  }
+}
 
 enum Tab{
     case workout, history, stats, body
@@ -24,6 +24,7 @@ enum Tab{
 struct HomePage: View {
     @State private var activeTab: Tab = .workout
     @State private var showingAddWorkout = false
+    @State private var isBarHidden: Bool = false
     
     static var todayStart: Date {
             Calendar.current.startOfDay(for: .now)
@@ -42,27 +43,9 @@ struct HomePage: View {
             ZStack(alignment: .bottom) {
                 VStack{
                     //Header
-                    HStack{
-                        VStack(alignment: .leading) {
-                            Text("FitFlux")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(
-                                    LinearGradient(colors: [.emerald400, .blue], startPoint: .leading, endPoint: .trailing)
-                                )
-                            Text(Date.now, style: .date)
-                                .font(.caption)
-                                .foregroundColor(.slate400)
-                        }
-                        Spacer()
-                        Button(action: {}) {
-                            Image(systemName: "person.fill")
-                                .foregroundColor(.slate300)
-                                .padding(10)
-                                .background(Color.slate800)
-                                .clipShape(Circle())
-                        }
-                    }.padding()
+                    if activeTab == .workout{
+                        header()
+                    }
                     //Current Sessions
                     
                         VStack {
@@ -70,40 +53,111 @@ struct HomePage: View {
                             case .workout:
                                 WorkoutView(exercises: storedExercises)
                             case .history:
-                                CalendarView()
+                                CalendarView(isBarHidden: $isBarHidden)
                             case .stats:
                                 StatsView()
                             case .body:
                                 BodyTrackerView()
                             }
                         }
-                        .padding(.bottom, 100) // Space for bottom nav
+                        .padding(.bottom, 10) // Space for bottom nav
                     
                     //Exercises
                 }
+                
                 VStack {
                     Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: openNewWorkout) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 60, height: 60)
-                                .background(Color.emerald500)
-                                .clipShape(Circle())
-                                .shadow(color: .emerald500.opacity(0.4), radius: 10, x: 0, y: 5)
-                        }
-                        .padding(.trailing, 24)
-                        .padding(.bottom, 90) // Position above tab bar
+                    if activeTab == .workout {
+                        fabButton
                     }
+//                    fabButton
+                                
+                    bottomNavBar()
                 }
+                
             }
+            
         }
         .sheet(isPresented: $showingAddWorkout) {
             NewWorkout()
         }
     }
+    
+    private var fabButton: some View {
+        HStack {
+            Spacer()
+            Button(action: openNewWorkout) {
+                Image(systemName: "plus")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 60, height: 60)
+                    .background(Color.emerald500)
+                    .clipShape(Circle())
+                    .shadow(color: .emerald500.opacity(0.4), radius: 10, x: 0, y: 5)
+            }
+            .padding(.trailing, 24)
+            .padding(.bottom, 90)
+            .offset(y: isBarHidden ? 300 : 0)
+        }
+    }
+    
+    private func header()-> some View{
+        HStack{
+            VStack(alignment: .leading) {
+                Text("FitFlux")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundStyle(
+                        LinearGradient(colors: [.emerald400, .blue], startPoint: .leading, endPoint: .trailing)
+                    )
+                Text(Date.now, style: .date)
+                    .font(.caption)
+                    .foregroundColor(.slate400)
+            }
+            Spacer()
+            Button(action: {}) {
+                Image(systemName: "person.fill")
+                    .foregroundColor(.slate300)
+                    .padding(10)
+                    .background(Color.slate800)
+                    .clipShape(Circle())
+            }
+        }.padding(.horizontal, 10)
+    }
+    
+    private func bottomNavBar() -> some View {
+        HStack(spacing: 0) {
+            Capsule()
+            .frame(width: 40, height: 4)
+            .foregroundStyle(Color.slate400)
+            .padding(.top, 8)
+            navItem(label: "Calendar", icon: "calendar", tab: .history)
+            navItem(label: "Workout", icon: "dumbbell.fill", tab: .workout)
+            navItem(label: "Stats", icon: "chart.bar.fill", tab: .stats)
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 30) // Extra padding for home indicator
+        .background(Color.slate800.opacity(0.95))
+        .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
+        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: -5)
+        .padding(.horizontal)
+        .offset(y: isBarHidden ? 150 : 0)
+    }
+
+    private func navItem(label: String, icon: String, tab: Tab) -> some View {
+        Button(action: { activeTab = tab }) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                Text(label)
+                    .font(.caption2)
+            }
+            .frame(maxWidth: .infinity)
+            .foregroundColor(activeTab == tab ? .emerald400 : .slate400)
+        }
+    }
+    
+    
     
     private func openNewWorkout() {
         showingAddWorkout = true
@@ -113,3 +167,4 @@ struct HomePage: View {
 #Preview {
     HomePage()
 }
+
