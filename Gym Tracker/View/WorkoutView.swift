@@ -14,26 +14,13 @@ struct WorkoutView: View {
 
     var body: some View {
         List(exercises) { exercise in
-            NavigationLink(destination: ExerciseDetailView(exercise: exercise)) {
-                exerciseRow(exercise)
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            deleteExercise(exercise)
-                        } label: {
-                            Label("Delete Exercise", systemImage: "trash")
-                        }
-                    }
-            }
+            ExerciseRowNav(exercise: exercise)
         }
         .listStyle(.insetGrouped)
         
     }
     
     
-    
-    private func deleteExercise(_ exercise: Exercise) {
-        modelContext.delete(exercise)
-        // Note: Relationship cascade will automatically handle associated sets
-    }
+
 }
 

@@ -17,6 +17,7 @@ struct CalendarView: View {
     
     @State private var viewMode: ViewMode = .calendar
     @State private var searchText = ""
+    @Environment(\.modelContext) private var modelContext
 
     // 1. Filter the list based on search text
     var searchedExercises: [Exercise] {
@@ -57,11 +58,7 @@ struct CalendarView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding()
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                        isBarHidden.toggle()
-                    }
-                }
+                
                 
                 if viewMode == .calendar {
                     Spacer().frame(height: 20)
@@ -76,9 +73,7 @@ struct CalendarView: View {
                                 ContentUnavailableView("No Workouts", systemImage: "dumbbell", description: Text("Rest day!"))
                             } else {
                                 ForEach(filteredExercises) { exercise in
-                                    NavigationLink(destination: ExerciseDetailView(exercise: exercise)) {
-                                        exerciseRow(exercise)
-                                    }
+                                    ExerciseRowNav(exercise: exercise)
                                 }
                             }
                         }
@@ -96,9 +91,7 @@ struct CalendarView: View {
                                 // Use the date as the Section Header
                                 Section(header: Text(group.date.formatted(date: .abbreviated, time: .omitted))) {
                                     ForEach(group.exercises) { exercise in
-                                        NavigationLink(destination: ExerciseDetailView(exercise: exercise)) {
-                                            exerciseRow(exercise)
-                                        }
+                                        ExerciseRowNav(exercise: exercise)
                                     }
                                 }
                             }

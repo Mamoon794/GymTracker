@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 func exerciseRow(_ exercise: Exercise) -> some View{
     HStack(spacing: 12) {
@@ -25,4 +26,50 @@ func exerciseRow(_ exercise: Exercise) -> some View{
         Spacer()
     }
     .padding(.vertical, 6)
+}
+
+func triggerSuccessHaptic() {
+    let generator = UIImpactFeedbackGenerator(style: .medium)
+    generator.prepare() // Reduces latency
+    generator.impactOccurred()
+}
+
+struct ExerciseRowNav: View{
+    let exercise: Exercise
+    @Environment(\.modelContext) private var modelContext
+    private var ops: DBOperations { DBOperations(modelContext: modelContext) }
+    @State private var showingRenameAlert = false
+    @State private var newName = ""
+    
+    var body: some View{
+        NavigationLink(destination: ExerciseDetailView(exercise: exercise)) {
+            exerciseRow(exercise)
+            .contextMenu {
+                Button(role: .destructive) {
+                    ops.deleteExercise(exercise)
+                } label: {
+                    Label("Delete Exercise", systemImage: "trash")
+                }
+                Button {
+                    showingRenameAlert = true
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+                Button {
+                    ops.duplicate(exercise)
+                    triggerSuccessHaptic()
+                } label: {
+                    Label("Duplicate", systemImage: "doc.on.doc")
+                }
+                
+            }
+        }
+        .alert("Rename Exercise", isPresented: $showingRenameAlert) {
+            TextField("Exercise Name", text: $newName)
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                ops.rename(exercise, to: newName)
+            }
+        }
+    }
 }

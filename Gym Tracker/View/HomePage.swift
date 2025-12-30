@@ -71,8 +71,25 @@ struct HomePage: View {
                         fabButton
                     }
 //                    fabButton
-                                
+                              
                     bottomNavBar()
+                }
+                if isBarHidden {
+                    Capsule()
+                        .fill(Color.emerald500)
+                        .frame(width: 60, height: 6)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .onTapGesture {
+                            withAnimation(.spring()) { isBarHidden = false }
+                        }
+                        // Also supports swiping up to reveal
+                        .gesture(
+                            DragGesture().onEnded { value in
+                                if value.translation.height < -20 {
+                                    withAnimation(.spring()) { isBarHidden = false }
+                                }
+                            }
+                        )
                 }
                 
             }
@@ -97,7 +114,6 @@ struct HomePage: View {
             }
             .padding(.trailing, 24)
             .padding(.bottom, 90)
-            .offset(y: isBarHidden ? 300 : 0)
         }
     }
     
@@ -135,13 +151,24 @@ struct HomePage: View {
             navItem(label: "Workout", icon: "dumbbell.fill", tab: .workout)
             navItem(label: "Stats", icon: "chart.bar.fill", tab: .stats)
         }
+        .frame(maxWidth: 370)
         .padding(.top, 12)
         .padding(.bottom, 30) // Extra padding for home indicator
         .background(Color.slate800.opacity(0.95))
         .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
         .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: -5)
         .padding(.horizontal)
-        .offset(y: isBarHidden ? 150 : 0)
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    if value.translation.height > 50 { // If dragged down
+                        withAnimation(.spring()) {
+                            isBarHidden = true
+                        }
+                    }
+                }
+        )
+        .offset(y: isBarHidden ? 200 : 0)
     }
 
     private func navItem(label: String, icon: String, tab: Tab) -> some View {
@@ -163,6 +190,7 @@ struct HomePage: View {
         showingAddWorkout = true
     }
 }
+
 
 #Preview {
     HomePage()
