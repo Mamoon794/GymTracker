@@ -11,10 +11,11 @@ import SwiftData
 struct WorkoutView: View {
     let exercises: [Exercise]
     @Environment(\.modelContext) private var modelContext
+    let allWorkoutOptions: [WorkoutOption]
 
     var body: some View {
         List(exercises) { exercise in
-            ExerciseRowNav(exercise: exercise)
+            ExerciseRowNav(exercise: exercise, allWorkoutOptions: allWorkoutOptions)
         }
         .listStyle(.insetGrouped)
         

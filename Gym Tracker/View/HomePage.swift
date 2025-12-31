@@ -9,22 +9,18 @@ import SwiftUI
 import Charts
 import SwiftData
 
-extension Color {
-      static let emerald400 = Color(red: 0.06, green: 0.78, blue: 0.53) // example values
-      static let emerald500 = Color(red: 0.00, green: 0.70, blue: 0.50)
-      static let slate400   = Color(red: 0.56, green: 0.60, blue: 0.67)
-      static let slate800   = Color(red: 0.12, green: 0.14, blue: 0.18)
-      static let slate300   = Color(red: 0.69, green: 0.73, blue: 0.78)
-}
+
 
 enum Tab{
-    case workout, history, stats, body
+    case workout, history, stats
 }
 
 struct HomePage: View {
     @State private var activeTab: Tab = .workout
     @State private var showingAddWorkout = false
+    @State private var showingPersonCustomization = false
     @State private var isBarHidden: Bool = false
+    @Query private var workoutOptions: [WorkoutOption]
     
     static var todayStart: Date {
             Calendar.current.startOfDay(for: .now)
@@ -51,13 +47,11 @@ struct HomePage: View {
                         VStack {
                             switch activeTab {
                             case .workout:
-                                WorkoutView(exercises: storedExercises)
+                                WorkoutView(exercises: storedExercises, allWorkoutOptions: workoutOptions)
                             case .history:
-                                CalendarView(isBarHidden: $isBarHidden)
+                                CalendarView(isBarHidden: $isBarHidden, allWorkoutOptions: workoutOptions)
                             case .stats:
                                 StatsView()
-                            case .body:
-                                BodyTrackerView()
                             }
                         }
                         .padding(.bottom, 10) // Space for bottom nav
@@ -98,6 +92,10 @@ struct HomePage: View {
         .sheet(isPresented: $showingAddWorkout) {
             NewWorkout()
         }
+        .sheet(isPresented: $showingPersonCustomization) {
+            PersonCustomization()
+        }
+        
     }
     
     private var fabButton: some View {
@@ -131,7 +129,7 @@ struct HomePage: View {
                     .foregroundColor(.slate400)
             }
             Spacer()
-            Button(action: {}) {
+            Button(action: openPersonCustomization) {
                 Image(systemName: "person.fill")
                     .foregroundColor(.slate300)
                     .padding(10)
@@ -151,7 +149,7 @@ struct HomePage: View {
             navItem(label: "Workout", icon: "dumbbell.fill", tab: .workout)
             navItem(label: "Stats", icon: "chart.bar.fill", tab: .stats)
         }
-        .frame(maxWidth: 370)
+        
         .padding(.top, 12)
         .padding(.bottom, 30) // Extra padding for home indicator
         .background(Color.slate800.opacity(0.95))
@@ -188,6 +186,10 @@ struct HomePage: View {
     
     private func openNewWorkout() {
         showingAddWorkout = true
+    }
+    
+    private func openPersonCustomization(){
+        showingPersonCustomization = true
     }
 }
 

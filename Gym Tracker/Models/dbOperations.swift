@@ -21,19 +21,15 @@ final class DBOperations {
         modelContext.delete(exercise)
     }
     
-    func rename(_ exercise: Exercise, to name: String){
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedName.isEmpty {
-            withAnimation {
-                exercise.name = trimmedName
-            
-            }
-        }
+    func updateExercise(_ exercise: Exercise, to option: WorkoutOption?){
+        exercise.sourceWorkout = option
+        exercise.name = option?.name ?? exercise.name
     }
     
     
     func duplicate(_ exercise: Exercise){
-        let newExercise = Exercise(name: exercise.name, imageName: exercise.imageName)
+        let sourceWork = exercise.sourceWorkout ?? WorkoutOption(name: exercise.name, category: WorkoutCategory.chest, image: "figure.strengthtraining.traditional")
+        let newExercise = Exercise(sourceWorkout: sourceWork)
         
         for currSet in exercise.sets{
             let newSet = ExerciseSet(reps: currSet.reps, weight: currSet.weight)
@@ -43,6 +39,11 @@ final class DBOperations {
         modelContext.insert(newExercise)
         
         
+    }
+    
+    func createExercise(workoutOption: WorkoutOption){
+        let newExercise = Exercise(sourceWorkout: workoutOption)
+        modelContext.insert(newExercise)
     }
 }
 

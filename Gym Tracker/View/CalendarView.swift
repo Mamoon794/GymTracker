@@ -18,6 +18,8 @@ struct CalendarView: View {
     @State private var viewMode: ViewMode = .calendar
     @State private var searchText = ""
     @Environment(\.modelContext) private var modelContext
+    
+    let allWorkoutOptions: [WorkoutOption]
 
     // 1. Filter the list based on search text
     var searchedExercises: [Exercise] {
@@ -65,6 +67,7 @@ struct CalendarView: View {
                     WorkoutCalendar(exercises: allExercises, selectedDate: $selectedDate)
                         .frame(height: 400)
                         .padding()
+                        .padding(.horizontal, -20)
                     
                     List {
                         
@@ -73,7 +76,7 @@ struct CalendarView: View {
                                 ContentUnavailableView("No Workouts", systemImage: "dumbbell", description: Text("Rest day!"))
                             } else {
                                 ForEach(filteredExercises) { exercise in
-                                    ExerciseRowNav(exercise: exercise)
+                                    ExerciseRowNav(exercise: exercise, allWorkoutOptions: allWorkoutOptions)
                                 }
                             }
                         }
@@ -91,7 +94,7 @@ struct CalendarView: View {
                                 // Use the date as the Section Header
                                 Section(header: Text(group.date.formatted(date: .abbreviated, time: .omitted))) {
                                     ForEach(group.exercises) { exercise in
-                                        ExerciseRowNav(exercise: exercise)
+                                        ExerciseRowNav(exercise: exercise, allWorkoutOptions: allWorkoutOptions)
                                     }
                                 }
                             }
@@ -164,6 +167,7 @@ struct WorkoutCalendar: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
+            
     }
 
     class Coordinator: NSObject, UICalendarViewDelegate, UICalendarSelectionSingleDateDelegate {
@@ -189,6 +193,6 @@ struct WorkoutCalendar: UIViewRepresentable {
 
 
 #Preview {
-    CalendarView(isBarHidden: .constant(false))
+    CalendarView(isBarHidden: .constant(false), allWorkoutOptions: [WorkoutOption(name: "test", category: WorkoutCategory.arms, image: "figure.strengthtraining.traditional")])
 }
 

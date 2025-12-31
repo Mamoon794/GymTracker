@@ -13,8 +13,10 @@ struct NewWorkout: View{
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) var dismiss
     @State private var searchText: String = ""
-    @State private var selectedCategory: String = workoutCategories[0]
+    @State private var selectedCategory: WorkoutCategory = .chest
     @State private var customName: String = ""
+    private var ops: DBOperations { DBOperations(modelContext: modelContext) }
+    @State private var isBarbell: Bool = false
     
     @Query(sort: \WorkoutOption.name) private var workoutOptions: [WorkoutOption]
     
@@ -26,12 +28,12 @@ struct NewWorkout: View{
         }
     }
     
-    private var groupedWorkouts: [String: [WorkoutOption]]{
+    private var groupedWorkouts: [WorkoutCategory: [WorkoutOption]]{
         Dictionary(grouping: filteredWorkouts, by:{$0.category})
     }
     
-    private var categories: [String]{
-        groupedWorkouts.keys.sorted()
+    private var categories: [WorkoutCategory]{
+        groupedWorkouts.keys.sorted { $0.rawValue < $1.rawValue }
     }
     
     
@@ -39,15 +41,46 @@ struct NewWorkout: View{
         NavigationStack{
             List{
                 if !searchText.isEmpty && !workoutOptions.contains(where: {$0.name == searchText}){
-                    Section("New Entry"){
-                        TextField("Workout Name", text: $customName)
-                        
-                        categoryPicker()
-                        
-                        Button(action: { addCustomWorkout() }) {
-                            Text("Create & Add Exercise")
+                    Section {
+                        VStack(alignment: .leading, spacing: 15) {
+                            // 1. Text Input with clear label
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("WORKOUT NAME")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                TextField("e.g. Incline Bench Press", text: $customName)
+                                    .textFieldStyle(.plain)
+                                    .font(.body)
+                            }
+                            
+                            Divider()
+                            
+                            // 2. Options Row
+                            
+                            categoryPicker() // Ensure this is styled as a Menu or compact picker
+                            
+                            Toggle(isOn: $isBarbell) {
+                                Label("Barbell", systemImage: "dumbbell.fill")
+                            }
+                            .toggleStyle(.button)
+                            .tint(isBarbell ? .emerald500 : .accentColor)
+                            .controlSize(.small)
+                            
+                            
+                            // 3. Primary Action Button
+                            Button(action: { addCustomWorkout() }) {
+                                Text("Create & Add Exercise")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.emerald500)
+                            .disabled(customName.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
-                        .disabled(searchText.isEmpty)
+                        .padding(.vertical, 5)
+                    } header: {
+                        Text("New Entry")
                     }
                 }
                 
@@ -63,8 +96,8 @@ struct NewWorkout: View{
     }
     
     
-    private func categoryWorkouts(currCategory: String) -> some View{
-        Section(header: Text(currCategory)){
+    private func categoryWorkouts(currCategory: WorkoutCategory) -> some View{
+        Section(header: Text(currCategory.rawValue)){
             ForEach(groupedWorkouts[currCategory] ?? []){ workout in
                 Button(action: {selectWorkout (workout)}){
                     HStack {
@@ -84,8 +117,8 @@ struct NewWorkout: View{
     
     private func categoryPicker() -> some View{
         Picker("Category", selection: $selectedCategory) {
-            ForEach(workoutCategories, id: \.self) { category in
-                Text(category).tag(category)
+            ForEach(WorkoutCategory.allCases) { category in
+                Text(category.rawValue).tag(category)
             }
         }
         .pickerStyle(.navigationLink)
@@ -103,24 +136,23 @@ struct NewWorkout: View{
 
     
     private func selectWorkout(_ workout: WorkoutOption){
-        createExercise(from: workout.name, image: workout.image)
+        // If your DB layer supports storing whether the set uses a barbell, pass `isBarbellWeight` here.
+        ops.createExercise(workoutOption: workout)
         dismiss()
     }
 
     
-    private func createExercise(from name: String, image: String){
-        let newExercise = Exercise(name: name, imageName: image)
-        modelContext.insert(newExercise)
-    }
-    
     private func addCustomWorkout(){
         print("Name: \(customName), Category: \(selectedCategory)")
         let nameToSave = customName
-        let newEntry = WorkoutOption(name: nameToSave, category: selectedCategory, image: "figure.strengthtraining.traditional")
-        modelContext.insert(newEntry)
+        let newWorkout = WorkoutOption(name: nameToSave, category: selectedCategory, image: "figure.strengthtraining.traditional", isBarbellWeight: isBarbell)
+        // Note: `isBarbellWeight` indicates whether this exercise uses a barbell. Wire this into your model as needed.
+        modelContext.insert(newWorkout)
         searchText = ""
-        createExercise(from: newEntry.name, image: newEntry.image)
+        // If your DB layer supports storing whether the set uses a barbell, pass `isBarbellWeight` here.
+        ops.createExercise(workoutOption: newWorkout)
         dismiss()
         
     }
 }
+

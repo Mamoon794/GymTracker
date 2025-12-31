@@ -8,14 +8,16 @@
 import SwiftData
 import Foundation
 
-let workoutCategories = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Cardio"]
 
 @Model
 class Exercise{
     var id: UUID = UUID()
     var name: String
-    var imageName: String
     var date: Date = Date.now
+    
+    
+    @Relationship(deleteRule: .nullify)
+    var sourceWorkout: WorkoutOption?
     
     @Relationship(deleteRule: .cascade)
     var sets: [ExerciseSet] = []
@@ -24,9 +26,21 @@ class Exercise{
         sets.count
     }
     
-    init(name: String, imageName: String){
-        self.name = name
-        self.imageName = imageName
+    init(sourceWorkout: WorkoutOption){
+        self.name = sourceWorkout.name
+        self.sourceWorkout = sourceWorkout
+    }
+    
+    func getIsBarbellWeight() -> Bool {
+        return sourceWorkout?.isBarbellWeight ?? false
+    }
+    
+    func getImageName() -> String{
+        return sourceWorkout?.image ?? "figure.strengthtraining.traditional"
+    }
+    
+    func getName() -> String{
+        return sourceWorkout?.name ?? self.name
     }
 }
 
@@ -43,18 +57,48 @@ class ExerciseSet {
     }
 }
 
+enum WorkoutCategory: String, Codable, CaseIterable, Identifiable {
+    case chest = "Chest"
+    case back = "Back"
+    case legs = "Legs"
+    case shoulders = "Shoulders"
+    case arms = "Arms"
+    case core = "Core"
+    case cardio = "Cardio"
+    
+    var icon: String {
+        switch self {
+        case .chest: return "figure.strengthtraining.traditional"
+        case .back: return "figure.rower"
+        case .legs: return "figure.run"
+        case .shoulders: return "figure.arms.open"
+        case .arms: return "hand.raised.fill"
+        case .core: return "figure.core.training"
+        case .cardio: return "heart.fill"
+        }
+    }
+    
+    var id: String { self.rawValue }
+}
+
 
 @Model
 class WorkoutOption {
     var id: UUID = UUID()
     var name: String
-    var category: String
+    var category: WorkoutCategory
     var image: String
+    var imageData: Data?
+    var isBarbellWeight: Bool = false
     
-    init(name: String, category: String, image: String) {
+    init(name: String, category: WorkoutCategory, image: String, isBarbellWeight: Bool = false) {
         self.name = name
         self.image = image
         self.category = category
+        self.isBarbellWeight = isBarbellWeight
     }
 }
+
+
+
 

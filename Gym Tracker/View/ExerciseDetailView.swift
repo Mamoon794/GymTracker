@@ -1,14 +1,14 @@
 import SwiftUI
-
-
+import SwiftData
 
 struct ExerciseDetailView: View {
     @Bindable var exercise: Exercise
-    
     @State private var newReps: String = ""
     @State private var newWeight: String = ""
     @State private var useKg: Bool = false
-    @State private var isBarbell: Bool = false
+    var isBarbell: Bool {
+        exercise.getIsBarbellWeight()
+    }
 
     var body: some View {
         List {
@@ -39,11 +39,9 @@ struct ExerciseDetailView: View {
                         Divider().frame(height: 20)
 
                         // The "Tick Mark" for Barbell formula
-                        Toggle(isOn: $isBarbell) {
-                            Label("Is Barbell Weight", systemImage: "dumbbell.fill")
-                        }
-                        .toggleStyle(.button)
-                        .tint(.emerald500)
+                        
+                        Label("Is Barbell Weight", systemImage: "dumbbell.fill")
+                            .foregroundStyle(isBarbell ? .emerald500: .blue)
                     }
 
                     Button(action: addSet) {
@@ -53,12 +51,16 @@ struct ExerciseDetailView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(!canAdd)
                 }
+                
             }
         }
         .navigationTitle(exercise.name)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { EditButton() }
         }
+        
+        DatePicker("Performed on", selection: $exercise.date)
+        
         
     }
     func move(indexSet: IndexSet, int: Int){
@@ -128,5 +130,5 @@ struct ExerciseRow: View {
 
 
 #Preview{
-    ExerciseDetailView(exercise: Exercise(name: "Test", imageName: "figure.strengthtraining.traditional"))
+    ExerciseDetailView(exercise: Exercise(sourceWorkout: WorkoutOption(name: "test", category: WorkoutCategory.chest, image: "figure.strengthtraining.traditional", isBarbellWeight: true)))
 }
