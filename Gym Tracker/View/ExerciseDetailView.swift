@@ -9,14 +9,20 @@ struct ExerciseDetailView: View {
     var isBarbell: Bool {
         exercise.getIsBarbellWeight()
     }
-
+    
+    var sortedIndices: [Int] {
+        exercise.sets.indices.sorted {
+            exercise.sets[$0].orderIndex < exercise.sets[$1].orderIndex
+        }
+    }
+    
     var body: some View {
         List {
             Section(header: Text("Sets")) {
-                ForEach($exercise.sets) { $set in
+                ForEach(sortedIndices, id: \.self) { idx in
                     ExerciseRow(
-                        setNumber: (exercise.sets.firstIndex(where: { $0.id == set.id }) ?? 0) + 1,
-                        set: $set
+                        setNumber: exercise.sets[idx].orderIndex + 1,
+                        set: $exercise.sets[idx]
                     )
                 }
                 .onDelete(perform: deleteSet)
@@ -39,9 +45,10 @@ struct ExerciseDetailView: View {
                         Divider().frame(height: 20)
 
                         // The "Tick Mark" for Barbell formula
-                        
-                        Label("Is Barbell Weight", systemImage: "dumbbell.fill")
-                            .foregroundStyle(isBarbell ? .emerald500: .blue)
+                        if (isBarbell){
+                            Label("Is Barbell Weight", systemImage: "dumbbell.fill")
+                                .foregroundStyle(.emerald500)
+                        }
                     }
 
                     Button(action: addSet) {
@@ -59,12 +66,17 @@ struct ExerciseDetailView: View {
             ToolbarItem(placement: .topBarLeading) { EditButton() }
         }
         
-        DatePicker("Performed on", selection: $exercise.date)
         
         
     }
-    func move(indexSet: IndexSet, int: Int){
-        exercise.sets.move(fromOffsets: indexSet, toOffset: int)
+    func move(from source: IndexSet, to destination: Int) {
+        var visibleSets = exercise.sets.sorted { $0.orderIndex < $1.orderIndex }
+        
+        visibleSets.move(fromOffsets: source, toOffset: destination)
+        
+        for (index, set) in visibleSets.enumerated() {
+            set.orderIndex = index
+        }
     }
 
     private var canAdd: Bool {
@@ -81,7 +93,7 @@ struct ExerciseDetailView: View {
             weight = (weight * 2) + 45
         }
         
-        let newSet = ExerciseSet(reps: reps, weight: weight)
+        let newSet = ExerciseSet(reps: reps, weight: weight, orderIndex: exercise.totalSets)
         exercise.sets.append(newSet)
         
         newReps = ""
@@ -89,7 +101,12 @@ struct ExerciseDetailView: View {
     }
     
     private func deleteSet(at offsets: IndexSet) {
-        exercise.sets.remove(atOffsets: offsets)
+        for offset in offsets {
+            let actualIndex = sortedIndices[offset]
+            exercise.sets.remove(at: actualIndex)
+        }
+        
+        exercise.synchronizeIndices()
     }
 
 }
@@ -122,7 +139,8 @@ struct ExerciseRow: View {
                 .contextMenu {
                     Button("+2.5 lbs") { set.weight += 2.5 }
                     Button("+5 lbs") { set.weight += 5 }
-                    Button("Reset weight") { set.weight = 0 }
+                    Button("-2.5 lbs") { set.weight -= 2.5 }
+                    Button("-5 lbs") { set.weight -= 5 }
                 }
         }
     }

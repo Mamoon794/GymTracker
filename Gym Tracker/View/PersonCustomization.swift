@@ -15,11 +15,32 @@ struct PersonCustomization: View {
     @Query private var allWorkoutOptions: [WorkoutOption]
     @Environment(\.modelContext) private var modelContext
     @State private var draftNames: [PersistentIdentifier: String] = [:]
+    @State private var selectedFilter: WorkoutCategory? = nil
+    
+    
+    private var filteredOptions: [WorkoutOption] {
+        if let selectedFilter {
+            return allWorkoutOptions.filter { $0.category == selectedFilter }
+        } else {
+            return allWorkoutOptions
+        }
+    }
     
     var body: some View {
         NavigationStack {
             List {
-                ForEach(allWorkoutOptions) { option in
+                Section {
+                    Picker("Filter by Category", selection: $selectedFilter) {
+                        Text("All Categories").tag(nil as WorkoutCategory?)
+                        Divider()
+                        ForEach(WorkoutCategory.allCases) { category in
+                            Text(category.rawValue).tag(category as WorkoutCategory?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                
+                ForEach(filteredOptions) { option in
                     Section(header: Text(option.name)) {
                         
                         HStack(spacing: 12) {

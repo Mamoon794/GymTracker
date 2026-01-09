@@ -65,8 +65,8 @@ struct CalendarView: View {
                 if viewMode == .calendar {
                     Spacer().frame(height: 20)
                     WorkoutCalendar(exercises: allExercises, selectedDate: $selectedDate)
-                        .frame(height: 400)
-                        .padding()
+                        .frame(height: 450)
+                        .padding(.bottom, 5)
                         .padding(.horizontal, -20)
                     
                     List {

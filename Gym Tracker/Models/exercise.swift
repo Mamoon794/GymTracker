@@ -26,8 +26,12 @@ class Exercise{
         sets.count
     }
     
-    init(sourceWorkout: WorkoutOption){
-        self.name = sourceWorkout.name
+    init(sourceWorkout: WorkoutOption?){
+        var workout = sourceWorkout
+        if (sourceWorkout == nil){
+            workout = WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)
+        }
+        self.name = workout?.name ?? "Chest"
         self.sourceWorkout = sourceWorkout
     }
     
@@ -42,6 +46,25 @@ class Exercise{
     func getName() -> String{
         return sourceWorkout?.name ?? self.name
     }
+    
+    func getImageData() -> Data?{
+        return self.sourceWorkout?.imageData
+    }
+    
+    func getCategory() -> WorkoutCategory{
+        return self.sourceWorkout?.category ?? WorkoutCategory.chest
+    }
+    
+    func getSourceWorkout() -> WorkoutOption{
+        return self.sourceWorkout ?? WorkoutOption(name: self.name, category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)
+    }
+    
+    func synchronizeIndices() {
+        let sorted = sets.sorted { $0.orderIndex < $1.orderIndex }
+        for (index, set) in sorted.enumerated() {
+            set.orderIndex = index
+        }
+    }
 }
 
 @Model
@@ -50,10 +73,12 @@ class ExerciseSet {
     var reps: Int
     var weight: Double
     var exercise: Exercise? // Backlink to the parent exercise
+    var orderIndex: Int
 
-    init(reps: Int, weight: Double) {
+    init(reps: Int, weight: Double, orderIndex: Int) {
         self.reps = reps
         self.weight = weight
+        self.orderIndex = orderIndex
     }
 }
 
@@ -90,6 +115,9 @@ class WorkoutOption {
     var image: String
     var imageData: Data?
     var isBarbellWeight: Bool = false
+    
+    @Relationship(deleteRule: .nullify, inverse: \Exercise.sourceWorkout)
+        var exercises: [Exercise]?
     
     init(name: String, category: WorkoutCategory, image: String, isBarbellWeight: Bool = false) {
         self.name = name

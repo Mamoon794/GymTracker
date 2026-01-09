@@ -6,16 +6,17 @@
 //
 
 import SwiftUI
+import SwiftData
 import Charts
 
+
+
 struct StatsView: View {
-    // Sample data - in a real app, this would come from your database
-    @State private var exerciseData = [
-        (name: "Bench Press", count: 12),
-        (name: "Squat", count: 8),
-        (name: "Deadlift", count: 5),
-        (name: "Overhead Press", count: 7)
-    ]
+    @Query(sort: \Exercise.sourceWorkout?.name, order: .forward)
+    private var allExercises: [Exercise]
+    let allWorkoutOptions: [WorkoutOption]
+    @State private var selectedWorkoutName: String = "Bench Press"
+    
     
     var body: some View {
         NavigationStack {
@@ -27,14 +28,34 @@ struct StatsView: View {
                     }
                     
                     // 2. One Rep Max Progress
-                    chartCard(title: "One Rep Max: Bench Press") {
-                        oneRepMaxLineChart()
+                    chartCard(title: "One Rep Max Progress") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            
+                            Picker("Select Exercise", selection: $selectedWorkoutName) {
+                                ForEach(allWorkoutOptions, id: \.name) { option in
+                                    Text(option.name).tag(option.name)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(.emerald500)
+                            .buttonStyle(.bordered)
+
+                            oneRepMaxLineChart(for: selectedWorkoutName)
+                        }
                     }
                     
                     // 3. Quick Stats Grid
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
-                        statSummaryCard(label: "Total Workouts", value: "24", color: .blue)
-                        statSummaryCard(label: "Volume (kg)", value: "12,450", color: .green)
+                        statSummaryCard(
+                            label: "Total Workouts",
+                            value: "\(allExercises.count)",
+                            color: .blue
+                        )
+                        statSummaryCard(
+                            label: "Volume (kg)",
+                            value: String(format: "%.0f", totalVolume),
+                            color: .emerald500
+                        )
                     }
                 }
                 .padding()
@@ -47,35 +68,62 @@ struct StatsView: View {
     // MARK: - Separate Action & Logic Functions
     
     private func exerciseFrequencyChart() -> some View {
-        Chart(exerciseData, id: \.name) { item in
+        Chart(topExerciseFrequencyData, id: \.name) { item in
             BarMark(
                 x: .value("Count", item.count),
                 y: .value("Exercise", item.name)
             )
+            // 🎯 1. This generates the colors and the legend automatically
             .foregroundStyle(by: .value("Exercise", item.name))
+            .cornerRadius(4)
+            
+            .annotation(position: .trailing) {
+                Text("\(item.count)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
-        .frame(height: 200)
+        .frame(height: 240)
+        .chartXAxis(.hidden)
+        // 🎯 2. Ensure the legend is explicitly shown at the bottom
+        .chartLegend(position: .bottom, alignment: .center)
+        .chartYAxis {
+            AxisMarks(values: .stride(by: 1)) { _ in
+                AxisValueLabel()
+            }
+        }
     }
-    
-    private func oneRepMaxLineChart() -> some View {
-        // Mock progress data
-        let progress = [100, 102.5, 102.5, 105, 110]
+
+    private func oneRepMaxLineChart(for name: String) -> some View {
+        let data = oneRepMaxData(for: name)
         
         return Chart {
-            ForEach(Array(progress.enumerated()), id: \.offset) { index, value in
+            ForEach(data, id: \.date) { item in
                 LineMark(
-                    x: .value("Week", index + 1),
-                    y: .value("Weight", value)
+                    x: .value("Date", item.date),
+                    y: .value("Weight", item.max)
                 )
                 .interpolationMethod(.catmullRom)
+                .foregroundStyle(.emerald500)
                 
                 PointMark(
-                    x: .value("Week", index + 1),
-                    y: .value("Weight", value)
+                    x: .value("Date", item.date),
+                    y: .value("Weight", item.max)
                 )
+                .foregroundStyle(.emerald500)
+                // 🎯 Check if this is the last item in the array
+                .annotation(position: .top, spacing: 8) {
+                    if item.date == data.last?.date {
+                        Text("\(item.max, specifier: "%.1f")")
+                            .font(.system(.caption, design: .rounded).bold())
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
         .frame(height: 150)
+        // Add extra padding so the label doesn't get cut off at the top
+        .chartYScale(range: .plotDimension(padding: 20))
     }
     
     // MARK: - Helper View Components
@@ -106,8 +154,44 @@ struct StatsView: View {
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
+    
+    
+    
+    private var topExerciseFrequencyData: [(name: String, count: Int)] {
+        // 1. Group the exercises
+        let counts = Dictionary(grouping: allExercises, by: { $0.getSourceWorkout().name})
+        
+        // 2. Transform and Sort
+        let sortedData = counts.map { (name: $0.key, count: $0.value.count) }
+            .sorted {
+                if $0.count != $1.count {
+                    return $0.count > $1.count // 🎯 Primary: Highest count first
+                } else {
+                    return $0.name < $1.name    // 🎯 Secondary: Alphabetical (Stable Tie-breaker)
+                }
+            }
+        
+        return Array(sortedData.prefix(6))
+    }
+
+
+    private func oneRepMaxData(for name: String) -> [(date: Date, max: Double)] {
+        let filtered = allExercises.filter { $0.getSourceWorkout().name == name }
+        
+        return filtered.compactMap { exercise in
+            // Get the best set from this specific exercise session
+            let best1RM = exercise.sets.map { Double($0.weight) * (1.0 + Double($0.reps) / 30.0) }.max()
+            return best1RM != nil ? (date: exercise.date, max: best1RM!) : nil
+        }.sorted { $0.date < $1.date }
+    }
+
+    private var totalVolume: Double {
+        allExercises.reduce(0) { total, exercise in
+            total + exercise.sets.reduce(0) { $0 + (Double($1.weight) * Double($1.reps)) }
+        }
+    }
 }
 
 #Preview {
-    StatsView()
+    StatsView(allWorkoutOptions: [WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)])
 }

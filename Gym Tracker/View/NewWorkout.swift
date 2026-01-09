@@ -17,8 +17,7 @@ struct NewWorkout: View{
     @State private var customName: String = ""
     private var ops: DBOperations { DBOperations(modelContext: modelContext) }
     @State private var isBarbell: Bool = false
-    
-    @Query(sort: \WorkoutOption.name) private var workoutOptions: [WorkoutOption]
+    let workoutOptions: [WorkoutOption]
     
     var filteredWorkouts: [WorkoutOption] {
         if searchText.isEmpty {
@@ -40,7 +39,7 @@ struct NewWorkout: View{
     var body: some View{
         NavigationStack{
             List{
-                if !searchText.isEmpty && !workoutOptions.contains(where: {$0.name == searchText}){
+                if !searchText.isEmpty && !workoutOptions.contains(where: {$0.name.lowercased() == searchText.lowercased()}){
                     Section {
                         VStack(alignment: .leading, spacing: 15) {
                             // 1. Text Input with clear label
@@ -60,7 +59,7 @@ struct NewWorkout: View{
                             categoryPicker() // Ensure this is styled as a Menu or compact picker
                             
                             Toggle(isOn: $isBarbell) {
-                                Label("Barbell", systemImage: "dumbbell.fill")
+                                Label("Is Barbell Weight", systemImage: "dumbbell.fill")
                             }
                             .toggleStyle(.button)
                             .tint(isBarbell ? .emerald500 : .accentColor)
@@ -88,11 +87,28 @@ struct NewWorkout: View{
                     categoryWorkouts(currCategory: category)
                 }
             }
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search or type name")
+            .searchable(
+                text: Binding(
+                    get: { searchText },
+                    set: { newValue in
+                        // 🎯 Apply the separate logic function
+                        searchText = formatSearchText(newValue)
+                    }
+                ),
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search or type name"
+            )
             .onChange(of: searchText) {oldValue, newValue in
                 customName = newValue
             }
         }
+    }
+    
+    private func formatSearchText(_ text: String) -> String {
+        // Splits by space, capitalizes each word, and joins them back
+        return text.components(separatedBy: " ")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
     }
     
     
@@ -146,13 +162,38 @@ struct NewWorkout: View{
         print("Name: \(customName), Category: \(selectedCategory)")
         let nameToSave = customName
         let newWorkout = WorkoutOption(name: nameToSave, category: selectedCategory, image: "figure.strengthtraining.traditional", isBarbellWeight: isBarbell)
-        // Note: `isBarbellWeight` indicates whether this exercise uses a barbell. Wire this into your model as needed.
+
         modelContext.insert(newWorkout)
+        
+        relinkOrphanedExercises(to: newWorkout)
+        
         searchText = ""
-        // If your DB layer supports storing whether the set uses a barbell, pass `isBarbellWeight` here.
         ops.createExercise(workoutOption: newWorkout)
         dismiss()
         
+    }
+    
+    private func relinkOrphanedExercises(to workoutOption: WorkoutOption) {
+        do {
+            // Fetch only exercises that have no sourceOption
+            let descriptor = FetchDescriptor<Exercise>(
+                predicate: #Predicate<Exercise> { $0.sourceWorkout == nil }
+            )
+            let orphans = try modelContext.fetch(descriptor)
+            
+            
+            for exercise in orphans {
+                if exercise.name.lowercased() == workoutOption.name.lowercased() {
+                    exercise.sourceWorkout = workoutOption
+                }
+            }
+            
+
+            try modelContext.save()
+            
+        } catch {
+            print("Failed to relink exercises: \(error)")
+        }
     }
 }
 

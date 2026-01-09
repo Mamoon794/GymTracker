@@ -32,7 +32,7 @@ final class DBOperations {
         let newExercise = Exercise(sourceWorkout: sourceWork)
         
         for currSet in exercise.sets{
-            let newSet = ExerciseSet(reps: currSet.reps, weight: currSet.weight)
+            let newSet = ExerciseSet(reps: currSet.reps, weight: currSet.weight, orderIndex: exercise.totalSets)
             newExercise.sets.append(newSet)
         }
         

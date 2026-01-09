@@ -51,7 +51,7 @@ struct HomePage: View {
                             case .history:
                                 CalendarView(isBarHidden: $isBarHidden, allWorkoutOptions: workoutOptions)
                             case .stats:
-                                StatsView()
+                                StatsView(allWorkoutOptions: workoutOptions)
                             }
                         }
                         .padding(.bottom, 10) // Space for bottom nav
@@ -69,33 +69,48 @@ struct HomePage: View {
                     bottomNavBar()
                 }
                 if isBarHidden {
-                    Capsule()
-                        .fill(Color.emerald500)
-                        .frame(width: 60, height: 6)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .onTapGesture {
-                            withAnimation(.spring()) { isBarHidden = false }
-                        }
-                        // Also supports swiping up to reveal
-                        .gesture(
-                            DragGesture().onEnded { value in
-                                if value.translation.height < -20 {
-                                    withAnimation(.spring()) { isBarHidden = false }
-                                }
+                    // 🎯 The Container (Invisible Hit Box)
+                    ZStack {
+                        Color.clear // Detects touches in the empty space
+                        
+                        Capsule()
+                            .fill(Color.emerald500)
+                            .frame(width: 6, height: 60)
+                    }
+                    .frame(width: 44, height: 100)
+                    .contentShape(Rectangle())
+                    .padding(.trailing, 0)
+                    .padding(.bottom, 100)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .onTapGesture {
+                        showBar()
+                    }
+                    .gesture(
+                        DragGesture().onEnded { value in
+                            if value.translation.width < -15 {
+                                showBar()
                             }
-                        )
+                        }
+                    )
                 }
                 
             }
             
         }
         .sheet(isPresented: $showingAddWorkout) {
-            NewWorkout()
+            NewWorkout(workoutOptions: workoutOptions)
         }
         .sheet(isPresented: $showingPersonCustomization) {
             PersonCustomization()
         }
         
+    }
+    
+    private func showBar() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            isBarHidden = false
+        }
     }
     
     private var fabButton: some View {
@@ -112,6 +127,7 @@ struct HomePage: View {
             }
             .padding(.trailing, 24)
             .padding(.bottom, 90)
+            .offset(y: isBarHidden ? 100 : 0)
         }
     }
     
@@ -140,17 +156,30 @@ struct HomePage: View {
     }
     
     private func bottomNavBar() -> some View {
-        HStack(spacing: 0) {
-            Capsule()
-            .frame(width: 40, height: 4)
-            .foregroundStyle(Color.slate400)
-            .padding(.top, 8)
-            navItem(label: "Calendar", icon: "calendar", tab: .history)
-            navItem(label: "Workout", icon: "dumbbell.fill", tab: .workout)
-            navItem(label: "Stats", icon: "chart.bar.fill", tab: .stats)
+        VStack(spacing: 0) {
+            ZStack {
+                Color.clear // Makes the whole area tappable
+                Capsule()
+                    .frame(width: 40, height: 4)
+                    .foregroundStyle(Color.slate400)
+            }
+            .frame(height: 30) // 🎯 Large hit area (30px vs 4px)
+            .contentShape(Rectangle()) // Ensures the clear area detects touchzz
+            .onTapGesture { hideBar() }
+            .gesture(
+                DragGesture().onEnded { value in
+                    if value.translation.height > 15 { hideBar() }
+                }
+            )
+            HStack{
+                navItem(label: "Calendar", icon: "calendar", tab: .history)
+                navItem(label: "Workout", icon: "dumbbell.fill", tab: .workout)
+                navItem(label: "Stats", icon: "chart.bar.fill", tab: .stats)
+            }
+            
+            
         }
         
-        .padding(.top, 12)
         .padding(.bottom, 30) // Extra padding for home indicator
         .background(Color.slate800.opacity(0.95))
         .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
@@ -159,7 +188,7 @@ struct HomePage: View {
         .gesture(
             DragGesture()
                 .onEnded { value in
-                    if value.translation.height > 50 { // If dragged down
+                    if value.translation.height > 20 { // If dragged down
                         withAnimation(.spring()) {
                             isBarHidden = true
                         }
@@ -167,6 +196,12 @@ struct HomePage: View {
                 }
         )
         .offset(y: isBarHidden ? 200 : 0)
+    }
+    
+    private func hideBar() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            isBarHidden = true
+        }
     }
 
     private func navItem(label: String, icon: String, tab: Tab) -> some View {

@@ -70,7 +70,7 @@ struct ExerciseRowNav: View{
                             ops.updateExercise(exercise, to: option)
                         } label: {
                             // 2. Simplified label logic
-                            if exercise.sourceWorkout?.id == option.id {
+                            if exercise.getSourceWorkout().id == option.id {
                                 Label(option.name, systemImage: "checkmark")
                             } else {
                                 Text(option.name)
@@ -90,7 +90,7 @@ struct ExerciseRowNav: View{
     
     func exerciseRow(_ exercise: Exercise) -> some View{
         HStack(spacing: 12) {
-            exerciseIcon(for: exercise.sourceWorkout)
+            exerciseIcon(for: exercise)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(exercise.getName())
@@ -105,8 +105,8 @@ struct ExerciseRowNav: View{
     }
     
     @ViewBuilder
-    private func exerciseIcon(for option: WorkoutOption?) -> some View {
-        if let data = option?.imageData, let uiImage = UIImage(data: data) {
+    private func exerciseIcon(for exercise: Exercise) -> some View {
+        if let data = exercise.getImageData(), let uiImage = UIImage(data: data) {
             // 🎯 Show the Generated Image
             Image(uiImage: uiImage)
                 .resizable()
@@ -115,7 +115,7 @@ struct ExerciseRowNav: View{
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         } else {
             // 🎯 Fallback to the System Icon
-            Image(systemName: option?.category.icon ?? "dumbbell.fill")
+            Image(systemName: exercise.getCategory().icon)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 32, height: 32)
@@ -132,11 +132,7 @@ struct ExerciseRowNav: View{
 
 struct ImageGenerator {
     
-    static func getConcepts(for name: String) -> [ImagePlaygroundConcept] {
-        let strings = [name, "fitness icon", "minimalist", "gym equipment"]
-        
-        return strings.map { .text($0) }
-    }
+    
     
     
     static func processResult(from url: URL, for option: WorkoutOption) {
@@ -149,36 +145,69 @@ struct ImageGenerator {
     }
 }
 
-
 struct ExerciseImageThumbnail: View {
     @Bindable var option: WorkoutOption
     @State private var isShowingPlayground = false
     
     var body: some View {
-        Button {
-            isShowingPlayground = true
-        } label: {
-            Group {
-                if let data = option.imageData, let uiImage = UIImage(data: data) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Image(systemName: "photo.badge.plus")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.emerald500)
+        // 1. The main container is now a ZStack so we can layer the buttons
+        ZStack(alignment: .topTrailing) {
+            
+            // --- The main "Add/Change Image" Button ---
+            Button {
+                isShowingPlayground = true
+            } label: {
+                Group {
+                    if let data = option.imageData, let uiImage = UIImage(data: data) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.emerald500)
+                    }
                 }
+                .frame(width: 44, height: 44)
+                .background(Color.slate800.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            .frame(width: 44, height: 44)
-            .background(Color.slate800.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            
+            // --- The "Remove" Button Overlay ---
+            // 🎯 Only show this if an image actually exists
+            if option.imageData != nil {
+                Button {
+                    // 🎯 Logic: Remove the image data
+                    // Added animation for a smoother UI feel
+                    withAnimation(.snappy) {
+                        option.imageData = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        // Use hierarchical styling: White icon icon with a dark background fill
+                        // This ensures visibility on both light and dark generated images.
+                        .foregroundStyle(.white, Color.black.opacity(0.7))
+                        .font(.system(size: 18))
+                        .background(Circle().fill(Color.white).padding(2)) // Optional: thin white border for extra pop
+                }
+                // Position it slightly outside the top-right corner like a badge
+                .offset(x: 6, y: -6)
+            }
         }
         // 🎯 Calling the separate logic here
         .imagePlaygroundSheet(
             isPresented: $isShowingPlayground,
-            concepts: ImageGenerator.getConcepts(for: option.name)
+            // Remember to use your ImageGenerator concepts here if you set that up previously!
+            concepts: [.text(option.name)]
         ) { url in
-            ImageGenerator.processResult(from: url, for: option)
+            // Remember to use your separate ImageGenerator logic here if you setup previously!
+             if let data = try? Data(contentsOf: url) {
+                 option.imageData = data
+             }
         }
     }
 }
+
+
+
+
