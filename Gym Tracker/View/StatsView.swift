@@ -12,48 +12,83 @@ import Charts
 
 
 struct StatsView: View {
-    @Query(sort: \Exercise.sourceWorkout?.name, order: .forward)
-    private var allExercises: [Exercise]
-    let allWorkoutOptions: [WorkoutOption]
-    @State private var selectedWorkoutName: String = "Bench Press"
+    @Query(sort: \WorkoutStat.workoutName, order: .reverse)
+    private var allStats: [WorkoutStat]
+    @AppStorage("lastSelectedWorkout") private var selectedWorkoutName: String = "Bench Press"
+    @Environment(\.modelContext) var modelContext
+    @State private var showSelectionSheet = false
+    let allWorkouts: [WorkoutOption]
     
+    private var selectedStat: WorkoutStat? {
+        let option = allWorkouts.first(where: { $0.name == selectedWorkoutName })
+        return option?.stats
+    }
+    
+    private var topFrequencyData: [WorkoutStat] {
+        Array(allStats.sorted { $0.frequency > $1.frequency }.prefix(7))
+    }
+    
+    
+    private var totalVolumeGlobal: Double {
+        allStats.reduce(0) { $0 + $1.totalVolume }
+    }
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // 1. Exercise Breakdown Chart
-                    chartCard(title: "Exercise Frequency") {
+                    
+                    // 1. Exercise Frequency Chart
+                    chartCard(title: "Most Frequent Exercises") {
                         exerciseFrequencyChart()
                     }
-                    
+                   
                     // 2. One Rep Max Progress
                     chartCard(title: "One Rep Max Progress") {
                         VStack(alignment: .leading, spacing: 12) {
                             
-                            Picker("Select Exercise", selection: $selectedWorkoutName) {
-                                ForEach(allWorkoutOptions, id: \.name) { option in
-                                    Text(option.name).tag(option.name)
+                            Button {
+                                showSelectionSheet = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(selectedWorkoutName)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    
+                                    
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .tint(.emerald500)
-                            .buttonStyle(.bordered)
+                            
 
-                            oneRepMaxLineChart(for: selectedWorkoutName)
+                            // Pass the specific stat object to the chart
+                            if let stat = selectedStat {
+                                oneRepMaxLineChart(stat: stat)
+                            } else {
+                                Text("No data available")
+                                    .foregroundStyle(.secondary)
+                                    .frame(height: 150)
+                            }
                         }
                     }
-                    
+                   
                     // 3. Quick Stats Grid
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
                         statSummaryCard(
-                            label: "Total Workouts",
-                            value: "\(allExercises.count)",
+                            label: "Exercises Tracked",
+                            value: "\(allStats.reduce(0) { $0 + $1.totalExercises })",
                             color: .blue
                         )
                         statSummaryCard(
-                            label: "Volume (kg)",
-                            value: String(format: "%.0f", totalVolume),
+                            label: "Total Days",
+                            value: "\(calculateTotalDays())",
+                            color: .blue
+                        )
+                        statSummaryCard(
+                            label: "Total Volume (kg)",
+                            value: String(format: "%.0f", totalVolumeGlobal),
                             color: .emerald500
                         )
                     }
@@ -62,40 +97,59 @@ struct StatsView: View {
             }
             .navigationTitle("Statistics")
             .background(Color(.systemGroupedBackground))
+            .onAppear {
+                print("Updating")
+                Task{
+                    if (allStats == []){
+                        for workout in allWorkouts{
+                            let newStat = WorkoutStat(workout: workout)
+                            modelContext.insert(newStat)
+                        }
+                    }
+                    
+                    else{
+                        for stats in allStats{
+                            stats.updateData()
+                        }
+                    }
+                    try? modelContext.save()
+                }
+                
+            }
+            .sheet(isPresented: $showSelectionSheet) {
+                NavigationStack {
+                    WorkoutSelectionView(selectedOption: $selectedWorkoutName)
+                }
+                .presentationDetents([.medium, .large])
+            }
         }
     }
-    
-    // MARK: - Separate Action & Logic Functions
-    
+   
+    // MARK: - Chart Functions
+   
     private func exerciseFrequencyChart() -> some View {
-        Chart(topExerciseFrequencyData, id: \.name) { item in
+        
+        Chart(topFrequencyData, id: \.workoutName) { stat in
             BarMark(
-                x: .value("Count", item.count),
-                y: .value("Exercise", item.name)
+                x: .value("Count", stat.frequency),
+                y: .value("Exercise", stat.workoutName)
             )
-            // 🎯 1. This generates the colors and the legend automatically
-            .foregroundStyle(by: .value("Exercise", item.name))
+            .foregroundStyle(by: .value("Exercise", stat.workoutName))
             .cornerRadius(4)
-            
             .annotation(position: .trailing) {
-                Text("\(item.count)")
+                Text("\(stat.frequency)")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .frame(height: 240)
         .chartXAxis(.hidden)
-        // 🎯 2. Ensure the legend is explicitly shown at the bottom
         .chartLegend(position: .bottom, alignment: .center)
-        .chartYAxis {
-            AxisMarks(values: .stride(by: 1)) { _ in
-                AxisValueLabel()
-            }
-        }
     }
 
-    private func oneRepMaxLineChart(for name: String) -> some View {
-        let data = oneRepMaxData(for: name)
+    private func oneRepMaxLineChart(stat: WorkoutStat) -> some View {
+        
+        let data = stat.oneRepMaxHistory
         
         return Chart {
             ForEach(data, id: \.date) { item in
@@ -105,14 +159,14 @@ struct StatsView: View {
                 )
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(.emerald500)
-                
+             
                 PointMark(
                     x: .value("Date", item.date),
                     y: .value("Weight", item.max)
                 )
                 .foregroundStyle(.emerald500)
-                // 🎯 Check if this is the last item in the array
                 .annotation(position: .top, spacing: 8) {
+                    // Only show label for the last/current max
                     if item.date == data.last?.date {
                         Text("\(item.max, specifier: "%.1f")")
                             .font(.system(.caption, design: .rounded).bold())
@@ -122,12 +176,11 @@ struct StatsView: View {
             }
         }
         .frame(height: 150)
-        // Add extra padding so the label doesn't get cut off at the top
         .chartYScale(range: .plotDimension(padding: 20))
     }
-    
-    // MARK: - Helper View Components
-    
+   
+    // MARK: - Helper View Components (Unchanged)
+   
     private func chartCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
@@ -138,7 +191,7 @@ struct StatsView: View {
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
-    
+   
     private func statSummaryCard(label: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading) {
             Text(label)
@@ -155,43 +208,23 @@ struct StatsView: View {
         .cornerRadius(12)
     }
     
-    
-    
-    private var topExerciseFrequencyData: [(name: String, count: Int)] {
-        // 1. Group the exercises
-        let counts = Dictionary(grouping: allExercises, by: { $0.getSourceWorkout().name})
-        
-        // 2. Transform and Sort
-        let sortedData = counts.map { (name: $0.key, count: $0.value.count) }
-            .sorted {
-                if $0.count != $1.count {
-                    return $0.count > $1.count // 🎯 Primary: Highest count first
-                } else {
-                    return $0.name < $1.name    // 🎯 Secondary: Alphabetical (Stable Tie-breaker)
-                }
-            }
-        
-        return Array(sortedData.prefix(6))
-    }
+    func calculateTotalDays() -> Int {
+        var allDates: [Date] = []
 
-
-    private func oneRepMaxData(for name: String) -> [(date: Date, max: Double)] {
-        let filtered = allExercises.filter { $0.getSourceWorkout().name == name }
         
-        return filtered.compactMap { exercise in
-            // Get the best set from this specific exercise session
-            let best1RM = exercise.sets.map { Double($0.weight) * (1.0 + Double($0.reps) / 30.0) }.max()
-            return best1RM != nil ? (date: exercise.date, max: best1RM!) : nil
-        }.sorted { $0.date < $1.date }
-    }
-
-    private var totalVolume: Double {
-        allExercises.reduce(0) { total, exercise in
-            total + exercise.sets.reduce(0) { $0 + (Double($1.weight) * Double($1.reps)) }
+        for stat in allStats {
+            let exercises = stat.sourceWorkout.getExercises()
+            
+            let dates = exercises.map { $0.date }
+            allDates.append(contentsOf: dates)
         }
+
+        let uniqueDays = Set(allDates.map { Calendar.current.startOfDay(for: $0) })
+
+        return uniqueDays.count
     }
 }
 
-#Preview {
-    StatsView(allWorkoutOptions: [WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)])
-}
+//#Preview {
+//    StatsView(allWorkoutOptions: [WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)])
+//}

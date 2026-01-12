@@ -12,6 +12,9 @@ import SwiftData
 
 struct CalendarView: View {
     @Query(sort: \Exercise.date, order: .reverse) private var allExercises: [Exercise]
+    
+//    var allExercises: [Exercise] = [Exercise(sourceWorkout: WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon), theDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 25)) ?? .now)]
+//    
     @State private var selectedDate: DateComponents? = Calendar.current.dateComponents([.day, .month, .year], from: .now)
     @Binding var isBarHidden: Bool
     
@@ -19,7 +22,6 @@ struct CalendarView: View {
     @State private var searchText = ""
     @Environment(\.modelContext) private var modelContext
     
-    let allWorkoutOptions: [WorkoutOption]
 
     // 1. Filter the list based on search text
     var searchedExercises: [Exercise] {
@@ -53,60 +55,60 @@ struct CalendarView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("View Mode", selection: $viewMode) {
-                    ForEach(ViewMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding()
-                
-                
                 if viewMode == .calendar {
-                    Spacer().frame(height: 20)
                     WorkoutCalendar(exercises: allExercises, selectedDate: $selectedDate)
-                        .frame(height: 450)
-                        .padding(.bottom, 5)
-                        .padding(.horizontal, -20)
-                    
-                    List {
-                        
-                        Section("Workouts for \(selectedDate?.date?.formatted(date: .abbreviated, time: .omitted) ?? "")") {
-                            if filteredExercises.isEmpty {
-                                ContentUnavailableView("No Workouts", systemImage: "dumbbell", description: Text("Rest day!"))
-                            } else {
-                                ForEach(filteredExercises) { exercise in
-                                    ExerciseRowNav(exercise: exercise, allWorkoutOptions: allWorkoutOptions)
-                                }
-                            }
-                        }
-                    }
-                    .listStyle(.insetGrouped)
-                    
-                    
-                } else {
-                    VStack{
-                        Spacer()
-                        searchBar
+                        .padding(.horizontal, 5)
+                        .frame(height: 490)
+            
+                    if (isBarHidden){
                         List {
                             
-                            ForEach(groupedByDate, id: \.date) { group in
-                                // Use the date as the Section Header
-                                Section(header: Text(group.date.formatted(date: .abbreviated, time: .omitted))) {
-                                    ForEach(group.exercises) { exercise in
-                                        ExerciseRowNav(exercise: exercise, allWorkoutOptions: allWorkoutOptions)
+                            Section("Workouts for \(selectedDate?.date?.formatted(date: .abbreviated, time: .omitted) ?? "")") {
+                                if filteredExercises.isEmpty {
+                                    ContentUnavailableView("No Workouts", systemImage: "dumbbell", description: Text("Rest day!"))
+                                } else {
+                                    ForEach(filteredExercises) { exercise in
+                                        ExerciseRowNav(exercise: exercise)
                                     }
                                 }
                             }
                         }
                         .listStyle(.insetGrouped)
                     }
+                    else{
+                        Spacer()
+                    }
+                    
+                    
+                } else {
+                    List {
+                        ForEach(groupedByDate, id: \.date) { group in
+                            Section(header: Text(group.date.formatted(date: .abbreviated, time: .omitted))) {
+                                ForEach(group.exercises) { exercise in
+                                    ExerciseRowNav(exercise: exercise)
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                    // 🎯 Native Search: Handles animations and focus automatically
+                    .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
                     
                 }
                 
             }
-        
-            
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("View Mode", selection: $viewMode) {
+                        ForEach(ViewMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    
+                }
+            }
         }
     }
     
@@ -193,6 +195,6 @@ struct WorkoutCalendar: UIViewRepresentable {
 
 
 #Preview {
-    CalendarView(isBarHidden: .constant(false), allWorkoutOptions: [WorkoutOption(name: "test", category: WorkoutCategory.arms, image: "figure.strengthtraining.traditional")])
+    CalendarView(isBarHidden: .constant(true))
 }
 

@@ -22,13 +22,6 @@ struct HomePage: View {
     @State private var isBarHidden: Bool = false
     @Query private var workoutOptions: [WorkoutOption]
     
-    static var todayStart: Date {
-            Calendar.current.startOfDay(for: .now)
-        }
-        
-    static var tomorrowStart: Date {
-        Calendar.current.date(byAdding: .day, value: 1, to: todayStart)!
-    }
     
     @Query(filter: #Predicate<Exercise> { exercise in
         exercise.date >= todayStart && exercise.date < tomorrowStart
@@ -47,14 +40,16 @@ struct HomePage: View {
                         VStack {
                             switch activeTab {
                             case .workout:
-                                WorkoutView(exercises: storedExercises, allWorkoutOptions: workoutOptions)
+                                WorkoutView()
+                                    .id("workout")
                             case .history:
-                                CalendarView(isBarHidden: $isBarHidden, allWorkoutOptions: workoutOptions)
+                                CalendarView(isBarHidden: $isBarHidden)
                             case .stats:
-                                StatsView(allWorkoutOptions: workoutOptions)
+                                StatsView(allWorkouts: workoutOptions)
                             }
                         }
-                        .padding(.bottom, 10) // Space for bottom nav
+                        .padding(.bottom, isBarHidden ? 10 : 100) // Space for bottom nav
+                        .background(isBarHidden ? Color.clear : Color(.systemGroupedBackground))
                     
                     //Exercises
                 }

@@ -6,6 +6,9 @@ struct ExerciseDetailView: View {
     @State private var newReps: String = ""
     @State private var newWeight: String = ""
     @State private var useKg: Bool = false
+    @State private var showHistory = false
+    
+    
     var isBarbell: Bool {
         exercise.getIsBarbellWeight()
     }
@@ -22,7 +25,8 @@ struct ExerciseDetailView: View {
                 ForEach(sortedIndices, id: \.self) { idx in
                     ExerciseRow(
                         setNumber: exercise.sets[idx].orderIndex + 1,
-                        set: $exercise.sets[idx]
+                        set: $exercise.sets[idx],
+                        exercise: exercise
                     )
                 }
                 .onDelete(perform: deleteSet)
@@ -40,7 +44,7 @@ struct ExerciseDetailView: View {
                     HStack(spacing: 20) {
                         // Toggle for Lbs vs Kg
                         Toggle("Use KG", isOn: $useKg).labelsHidden()
-                        Text(useKg ? "KG" : "LB").font(.caption).bold()
+                        Text("KG").font(.caption).bold()
 
                         Divider().frame(height: 20)
 
@@ -64,11 +68,24 @@ struct ExerciseDetailView: View {
         .navigationTitle(exercise.name)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { EditButton() }
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: { showHistory = true }) {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+            }
+        }
+        .sheet(isPresented: $showHistory) {
+            // Safely unwrap the parent WorkoutOption
+            ExerciseHistorySheet(option: exercise.getSourceWorkout())
+                    .presentationDetents([.medium, .large])
         }
         
         
         
     }
+    
+    
     func move(from source: IndexSet, to destination: Int) {
         var visibleSets = exercise.sets.sorted { $0.orderIndex < $1.orderIndex }
         
@@ -80,11 +97,13 @@ struct ExerciseDetailView: View {
     }
 
     private var canAdd: Bool {
-        Int(newReps) != nil && Double(newWeight) != nil
+        Int(newReps) != nil
     }
 
     private func addSet() {
-        guard let reps = Int(newReps), var weight = Double(newWeight) else { return }
+        guard let reps = Int(newReps) else { return }
+        
+        var weight = Double(newWeight) ?? 0.0
         
         if useKg{
             weight = weight * 2.205
@@ -98,6 +117,8 @@ struct ExerciseDetailView: View {
         
         newReps = ""
         newWeight = ""
+        
+        exercise.getSourceWorkout().lastUpdated = Date.now
     }
     
     private func deleteSet(at offsets: IndexSet) {
@@ -107,6 +128,7 @@ struct ExerciseDetailView: View {
         }
         
         exercise.synchronizeIndices()
+        exercise.getSourceWorkout().lastUpdated = Date.now
     }
 
 }
@@ -115,6 +137,7 @@ struct ExerciseDetailView: View {
 struct ExerciseRow: View {
     var setNumber: Int
     @Binding var set: ExerciseSet
+    var exercise: Exercise
     
     
     var body: some View {
@@ -130,6 +153,9 @@ struct ExerciseRow: View {
                 Text("Reps: \(set.reps)")
             }
             .frame(maxWidth: 170)
+            .onChange(of: set.reps) { _, _ in
+                exercise.getSourceWorkout().lastUpdated = Date.now
+            }
             
             Spacer()
             
@@ -137,12 +163,18 @@ struct ExerciseRow: View {
                 .foregroundStyle(.secondary)
                 .padding(.leading, 8)
                 .contextMenu {
-                    Button("+2.5 lbs") { set.weight += 2.5 }
-                    Button("+5 lbs") { set.weight += 5 }
-                    Button("-2.5 lbs") { set.weight -= 2.5 }
-                    Button("-5 lbs") { set.weight -= 5 }
+                    Button("+2.5 lbs") { updateWeight(2.5) }
+                    Button("+5 lbs") { updateWeight(5) }
+                    Button("-2.5 lbs") { updateWeight(-2.5) }
+                    Button("-5 lbs") { updateWeight(-5) }
                 }
         }
+    }
+    
+    private func updateWeight(_ weight: Double){
+        set.weight += weight
+        exercise.getSourceWorkout().lastUpdated = Date.now
+        
     }
 }
 
@@ -150,3 +182,4 @@ struct ExerciseRow: View {
 #Preview{
     ExerciseDetailView(exercise: Exercise(sourceWorkout: WorkoutOption(name: "test", category: WorkoutCategory.chest, image: "figure.strengthtraining.traditional", isBarbellWeight: true)))
 }
+

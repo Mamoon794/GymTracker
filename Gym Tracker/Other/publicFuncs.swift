@@ -27,6 +27,14 @@ extension ShapeStyle where Self == Color {
     
 }
 
+var todayStart: Date {
+        Calendar.current.startOfDay(for: .now)
+    }
+    
+var tomorrowStart: Date {
+    Calendar.current.date(byAdding: .day, value: 1, to: todayStart)!
+}
+
 
 func triggerSuccessHaptic() {
     let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -36,18 +44,12 @@ func triggerSuccessHaptic() {
 
 struct ExerciseRowNav: View{
     let exercise: Exercise
-    let allWorkoutOptions: [WorkoutOption]
     @Environment(\.modelContext) private var modelContext
     private var ops: DBOperations { DBOperations(modelContext: modelContext) }
     @State private var showingRenameAlert = false
     @State private var selectedOption: WorkoutOption?
+    @State private var showSelectionSheet = false
     
-    var groupedByCategory: [(category: WorkoutCategory, options: [WorkoutOption])] {
-        let grouped = Dictionary(grouping: allWorkoutOptions) { $0.category }
-        return grouped
-            .map { (key, value) in (category: key, options: value) }
-            .sorted { $0.category.rawValue < $1.category.rawValue }
-    }
     
     var body: some View{
         NavigationLink(destination: ExerciseDetailView(exercise: exercise)) {
@@ -64,25 +66,18 @@ struct ExerciseRowNav: View{
                 } label: {
                     Label("Duplicate", systemImage: "doc.on.doc")
                 }
-                Menu {
-                    ForEach(allWorkoutOptions) { option in
-                        Button {
-                            ops.updateExercise(exercise, to: option)
-                        } label: {
-                            // 2. Simplified label logic
-                            if exercise.getSourceWorkout().id == option.id {
-                                Label(option.name, systemImage: "checkmark")
-                            } else {
-                                Text(option.name)
-                            }
-                        }
-                    }
-                    
-                    
+                Button {
+                    showSelectionSheet = true
                 } label: {
                     Label("Change Exercise Type", systemImage: "pencil")
                 }
                 
+            }
+            .sheet(isPresented: $showSelectionSheet) {
+                NavigationStack {
+                    WorkoutChangeView(exercise: exercise, ops: ops)
+                }
+                .presentationDetents([.medium, .large])
             }
         }
         

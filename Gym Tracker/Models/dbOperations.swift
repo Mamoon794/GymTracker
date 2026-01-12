@@ -18,12 +18,15 @@ final class DBOperations {
     }
 
     func deleteExercise(_ exercise: Exercise) {
+        exercise.getSourceWorkout().lastUpdated = Date.now
         modelContext.delete(exercise)
     }
     
     func updateExercise(_ exercise: Exercise, to option: WorkoutOption?){
+        exercise.getSourceWorkout().lastUpdated = Date.now
         exercise.sourceWorkout = option
         exercise.name = option?.name ?? exercise.name
+        exercise.getSourceWorkout().lastUpdated = Date.now
     }
     
     
@@ -35,6 +38,8 @@ final class DBOperations {
             let newSet = ExerciseSet(reps: currSet.reps, weight: currSet.weight, orderIndex: exercise.totalSets)
             newExercise.sets.append(newSet)
         }
+        
+        exercise.getSourceWorkout().lastUpdated = Date.now
         
         modelContext.insert(newExercise)
         
