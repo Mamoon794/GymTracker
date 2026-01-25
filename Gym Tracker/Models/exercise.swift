@@ -30,7 +30,7 @@ class Exercise{
         var workout = sourceWorkout
         self.date = theDate
         if (sourceWorkout == nil){
-            workout = WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)
+            workout = WorkoutOption(name: "Chest", category: WorkoutCategory.chest)
         }
         self.name = workout?.name ?? "Chest"
         self.sourceWorkout = sourceWorkout
@@ -41,7 +41,7 @@ class Exercise{
     }
     
     func getImageName() -> String{
-        return sourceWorkout?.image ?? "figure.strengthtraining.traditional"
+        return sourceWorkout?.getImage() ?? "figure.strengthtraining.traditional"
     }
     
     func getName() -> String{
@@ -57,7 +57,7 @@ class Exercise{
     }
     
     func getSourceWorkout() -> WorkoutOption{
-        return self.sourceWorkout ?? WorkoutOption(name: self.name, category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)
+        return self.sourceWorkout ?? WorkoutOption(name: self.name, category: WorkoutCategory.chest)
     }
     
     func synchronizeIndices() {
@@ -113,7 +113,7 @@ class WorkoutOption {
     var id: UUID = UUID()
     var name: String
     var category: WorkoutCategory
-    var image: String
+    @Transient var image: String = WorkoutCategory.chest.icon
     var imageData: Data?
     var isBarbellWeight: Bool = false
     var lastUpdated: Date = Date()
@@ -124,9 +124,8 @@ class WorkoutOption {
     @Relationship(deleteRule: .cascade, inverse: \WorkoutStat.sourceWorkout)
         var stats: WorkoutStat?
     
-    init(name: String, category: WorkoutCategory, image: String, isBarbellWeight: Bool = false) {
+    init(name: String, category: WorkoutCategory, isBarbellWeight: Bool = false) {
         self.name = name
-        self.image = image
         self.category = category
         self.isBarbellWeight = isBarbellWeight
     }
@@ -134,6 +133,14 @@ class WorkoutOption {
     func getExercises() -> [Exercise] {
         let allExercises = self.exercises ?? []
         return allExercises.filter { $0.totalSets > 0 }
+    }
+
+    func getImage() -> String {
+        return self.category.icon
+    }
+
+    func getImageData() -> Data? {
+        return self.imageData
     }
     
 }
@@ -202,10 +209,7 @@ class WorkoutStat {
     }
     
     func updateData(){
-        print(sourceWorkout.lastUpdated)
-        print(self.lastUpdated)
         if (sourceWorkout.lastUpdated > self.lastUpdated){
-            print("Actually updating")
             self.recalculateStats()
         }
     }
@@ -248,3 +252,4 @@ class RoutineItem {
         self.workoutOption = workoutOption
     }
 }
+

@@ -18,9 +18,7 @@ enum Tab{
 struct HomePage: View {
     @State private var activeTab: Tab = .workout
     @State private var showingAddWorkout = false
-    @State private var showingPersonCustomization = false
     @State private var isBarHidden: Bool = false
-    @Query private var workoutOptions: [WorkoutOption]
     
     
     @Query(filter: #Predicate<Exercise> { exercise in
@@ -45,7 +43,7 @@ struct HomePage: View {
                             case .history:
                                 CalendarView(isBarHidden: $isBarHidden)
                             case .stats:
-                                StatsView(allWorkouts: workoutOptions)
+                                StatsView()
                             }
                         }
                         .padding(.bottom, isBarHidden ? 10 : 100) // Space for bottom nav
@@ -94,10 +92,7 @@ struct HomePage: View {
             
         }
         .sheet(isPresented: $showingAddWorkout) {
-            NewWorkout(workoutOptions: workoutOptions)
-        }
-        .sheet(isPresented: $showingPersonCustomization) {
-            PersonCustomization()
+            NewWorkout()
         }
         
     }
@@ -140,7 +135,7 @@ struct HomePage: View {
                     .foregroundColor(.slate400)
             }
             Spacer()
-            Button(action: openPersonCustomization) {
+            NavigationLink(destination: PersonCustomization()) {
                 Image(systemName: "person.fill")
                     .foregroundColor(.slate300)
                     .padding(10)
@@ -218,9 +213,6 @@ struct HomePage: View {
         showingAddWorkout = true
     }
     
-    private func openPersonCustomization(){
-        showingPersonCustomization = true
-    }
 }
 
 

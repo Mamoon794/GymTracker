@@ -17,11 +17,10 @@ struct StatsView: View {
     @AppStorage("lastSelectedWorkout") private var selectedWorkoutName: String = "Bench Press"
     @Environment(\.modelContext) var modelContext
     @State private var showSelectionSheet = false
-    let allWorkouts: [WorkoutOption]
     
     private var selectedStat: WorkoutStat? {
-        let option = allWorkouts.first(where: { $0.name == selectedWorkoutName })
-        return option?.stats
+        let option = allStats.first(where: { $0.sourceWorkout.name == selectedWorkoutName })
+        return option
     }
     
     private var topFrequencyData: [WorkoutStat] {
@@ -98,20 +97,12 @@ struct StatsView: View {
             .navigationTitle("Statistics")
             .background(Color(.systemGroupedBackground))
             .onAppear {
-                print("Updating")
                 Task{
-                    if (allStats == []){
-                        for workout in allWorkouts{
-                            let newStat = WorkoutStat(workout: workout)
-                            modelContext.insert(newStat)
-                        }
+                    
+                    for stats in allStats{
+                        stats.updateData()
                     }
                     
-                    else{
-                        for stats in allStats{
-                            stats.updateData()
-                        }
-                    }
                     try? modelContext.save()
                 }
                 
@@ -145,6 +136,7 @@ struct StatsView: View {
         .frame(height: 240)
         .chartXAxis(.hidden)
         .chartLegend(position: .bottom, alignment: .center)
+        .padding(.horizontal, 3)
     }
 
     private func oneRepMaxLineChart(stat: WorkoutStat) -> some View {

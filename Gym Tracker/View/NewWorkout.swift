@@ -17,7 +17,7 @@ struct NewWorkout: View{
     @State private var customName: String = ""
     private var ops: DBOperations { DBOperations(modelContext: modelContext) }
     @State private var isBarbell: Bool = false
-    let workoutOptions: [WorkoutOption]
+    @Query private var workoutOptions: [WorkoutOption]
     
     var filteredWorkouts: [WorkoutOption] {
         if searchText.isEmpty {
@@ -39,6 +39,10 @@ struct NewWorkout: View{
     var body: some View{
         NavigationStack{
             List{
+                ForEach(categories, id: \.self){category in
+                    categoryWorkouts(currCategory: category)
+                }
+                
                 if !searchText.isEmpty && !workoutOptions.contains(where: {$0.name.lowercased() == searchText.lowercased()}){
                     Section {
                         VStack(alignment: .leading, spacing: 15) {
@@ -83,9 +87,7 @@ struct NewWorkout: View{
                     }
                 }
                 
-                ForEach(categories, id: \.self){category in
-                    categoryWorkouts(currCategory: category)
-                }
+                
             }
             .searchable(
                 text: Binding(
@@ -114,19 +116,20 @@ struct NewWorkout: View{
     
     private func categoryWorkouts(currCategory: WorkoutCategory) -> some View{
         Section(header: Text(currCategory.rawValue)){
-            ForEach(groupedWorkouts[currCategory] ?? []){ workout in
-                Button(action: {selectWorkout (workout)}){
+            let workouts = groupedWorkouts[currCategory] ?? []
+            ForEach(workouts) { workout in
+                Button(action: { selectWorkout(workout) }) {
                     HStack {
-                        Image(systemName: workout.image)
+                        exerciseIcon(imageData: workout.getImageData(), iconName: workout.category.icon)
                             .foregroundColor(.emerald500)
-                            .frame(width: 24)
+                            .frame(width: 24, height: 24)
                         Text(workout.name)
                             .foregroundColor(.primary)
                     }
                 }
             }
             .onDelete { offsets in
-                deleteWorkout(at: offsets, in: groupedWorkouts[currCategory] ?? [])
+                deleteWorkout(at: offsets, in: workouts)
             }
         }
     }
@@ -159,9 +162,11 @@ struct NewWorkout: View{
 
     
     private func addCustomWorkout(){
-        print("Name: \(customName), Category: \(selectedCategory)")
         let nameToSave = customName
-        let newWorkout = WorkoutOption(name: nameToSave, category: selectedCategory, image: "figure.strengthtraining.traditional", isBarbellWeight: isBarbell)
+        let newWorkout = WorkoutOption(name: nameToSave, category: selectedCategory, isBarbellWeight: isBarbell)
+        
+        let newStat = WorkoutStat(workout: newWorkout)
+        modelContext.insert(newStat)
 
         modelContext.insert(newWorkout)
         

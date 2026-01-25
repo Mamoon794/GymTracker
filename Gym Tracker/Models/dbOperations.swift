@@ -31,7 +31,7 @@ final class DBOperations {
     
     
     func duplicate(_ exercise: Exercise){
-        let sourceWork = exercise.sourceWorkout ?? WorkoutOption(name: exercise.name, category: WorkoutCategory.chest, image: "figure.strengthtraining.traditional")
+        let sourceWork = exercise.sourceWorkout ?? WorkoutOption(name: exercise.name, category: WorkoutCategory.chest)
         let newExercise = Exercise(sourceWorkout: sourceWork)
         
         for currSet in exercise.sets{

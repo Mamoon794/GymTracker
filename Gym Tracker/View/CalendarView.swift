@@ -28,13 +28,13 @@ struct CalendarView: View {
         if searchText.isEmpty {
             return allExercises
         } else {
-            return allExercises.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            return allExercises.filter { $0.getName().localizedCaseInsensitiveContains(searchText) }
         }
     }
         
     enum ViewMode: String, CaseIterable {
         case calendar = "Calendar"
-        case list = "List"
+        case list = "Exercises"
     }
     
     // Filter exercises based on the selected calendar day

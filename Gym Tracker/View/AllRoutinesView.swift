@@ -114,7 +114,7 @@ struct AddRoutineSheet: View {
     @Query(sort: \WorkoutOption.name) var allOptions: [WorkoutOption]
     
     @State private var routineName: String = ""
-    @State private var selectedOptions: Set<WorkoutOption> = []
+    @State private var selectedOptions: [WorkoutOption] = []
     
     var body: some View {
         NavigationStack {
@@ -125,30 +125,7 @@ struct AddRoutineSheet: View {
                 }
                 
                 // Section 2: Exercise Selection
-                Section("Select Exercises") {
-                    ForEach(allOptions) { option in
-                        HStack {
-                            // Image/Icon
-                            Image(systemName: option.image) // Use your image logic here
-                                .foregroundStyle(.blue)
-                                .frame(width: 30)
-                            
-                            Text(option.name)
-                            
-                            Spacer()
-                            
-                            // Checkmark logic
-                            if selectedOptions.contains(option) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.blue)
-                            }
-                        }
-                        .contentShape(Rectangle()) // Makes whole row tappable
-                        .onTapGesture {
-                            toggleSelection(for: option)
-                        }
-                    }
-                }
+                SelectExercise(allOptions: allOptions, selectedOptions: $selectedOptions)
             }
             .navigationTitle("New Routine")
             .navigationBarTitleDisplayMode(.inline)
@@ -167,14 +144,6 @@ struct AddRoutineSheet: View {
         }
     }
     
-    // Helper to toggle selection
-    func toggleSelection(for option: WorkoutOption) {
-        if selectedOptions.contains(option) {
-            selectedOptions.remove(option)
-        } else {
-            selectedOptions.insert(option)
-        }
-    }
     
     // Logic to save data
     func saveRoutine() {
@@ -184,9 +153,8 @@ struct AddRoutineSheet: View {
         
         // 2. Create items for selected exercises
         // Note: Using a set loses order, so we just sort alphabetically or by library order for now
-        let sortedSelection = allOptions.filter { selectedOptions.contains($0) }
         
-        for (index, option) in sortedSelection.enumerated() {
+        for (index, option) in selectedOptions.enumerated() {
             let item = RoutineItem(orderIndex: index, workoutOption: option)
             item.routine = newRoutine // Link to parent
             context.insert(item)
@@ -194,6 +162,47 @@ struct AddRoutineSheet: View {
         
         // 3. Save
         try? context.save()
+    }
+}
+
+
+struct SelectExercise: View{
+    var allOptions: [WorkoutOption]
+    @Binding var selectedOptions: [WorkoutOption]
+    var body: some View{
+        Section("Select Exercises") {
+            ForEach(allOptions) { option in
+                HStack {
+                    // Image/Icon
+                    exerciseIcon(imageData: option.getImageData(), iconName: option.getImage())
+                        .foregroundStyle(.blue)
+                        .frame(width: 24, height: 24)
+                    
+                    Text(option.name)
+                    
+                    Spacer()
+                    
+                    // Checkmark logic
+                    if selectedOptions.firstIndex(of: option) != nil {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.blue)
+                    }
+                }
+                .contentShape(Rectangle()) // Makes whole row tappable
+                .onTapGesture {
+                    toggleSelection(for: option)
+                }
+            }
+        }
+    }
+
+    // Helper to toggle selection
+    func toggleSelection(for option: WorkoutOption) {
+        if let index = selectedOptions.firstIndex(of: option) {
+            selectedOptions.remove(at: index)
+        } else {
+            selectedOptions.append(option)
+        }
     }
 }
 
