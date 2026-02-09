@@ -17,6 +17,11 @@ struct StatsView: View {
     @AppStorage("lastSelectedWorkout") private var selectedWorkoutName: String = "Bench Press"
     @Environment(\.modelContext) var modelContext
     @State private var showSelectionSheet = false
+
+    private var totalExercises: Int {
+        allStats.reduce(0) { $0 + $1.totalExercises }
+    }
+
     
     private var selectedStat: WorkoutStat? {
         let option = allStats.first(where: { $0.sourceWorkout.name == selectedWorkoutName })
@@ -38,9 +43,12 @@ struct StatsView: View {
                 VStack(spacing: 20) {
                     
                     // 1. Exercise Frequency Chart
-                    chartCard(title: "Most Frequent Exercises") {
-                        exerciseFrequencyChart()
+                    NavigationLink(destination: FullFrequencyView(allStats: allStats)) {
+                        chartCard(title: "Most Frequent Exercises") {
+                            exerciseFrequencyChart()
+                        }
                     }
+                    .buttonStyle(PlainButtonStyle())
                    
                     // 2. One Rep Max Progress
                     chartCard(title: "One Rep Max Progress") {
@@ -76,8 +84,18 @@ struct StatsView: View {
                     // 3. Quick Stats Grid
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
                         statSummaryCard(
+                            label: "Exercises Per Day",
+                            value: String(format: "%.1f", Double(totalExercises)/Double(calculateTotalDays())),
+                            color: .blue
+                        )
+                        statSummaryCard(
+                            label: "Weeks Per Month",
+                            value: String(format: "%.1f", calculateMonthlyFrequency()),
+                            color: .blue
+                        )
+                        statSummaryCard(
                             label: "Exercises Tracked",
-                            value: "\(allStats.reduce(0) { $0 + $1.totalExercises })",
+                            value: "\(totalExercises)",
                             color: .blue
                         )
                         statSummaryCard(
@@ -215,7 +233,93 @@ struct StatsView: View {
 
         return uniqueDays.count
     }
+
+
+    func calculateMonthlyFrequency() -> Double {
+        let calendar = Calendar.current
+        let now = Date.now
+        
+        // 1. Get the start of the current month (e.g., Nov 1st, 00:00)
+        guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) else { return 0.0 }
+        
+        // 2. Gather all workout dates
+        var allDates: [Date] = []
+        for stat in allStats {
+            let exercises = stat.sourceWorkout.getExercises()
+            allDates.append(contentsOf: exercises.map { $0.date })
+        }
+        
+        // 3. Filter for only dates in THIS month
+        let thisMonthDates = allDates.filter { $0 >= startOfMonth }
+        
+        // 4. Count unique calendar days
+        let uniqueDays = Set(thisMonthDates.map { calendar.startOfDay(for: $0) }).count
+        
+        // 5. Calculate how many weeks have passed in this month
+        // We use max(1 day, time) to prevent division by zero or huge numbers on the 1st of the month
+        let daysSinceStart = calendar.dateComponents([.day], from: startOfMonth, to: now).day ?? 1
+        let weeksPassed = max(Double(daysSinceStart) / 7.0, 0.14) // 0.14 is approx 1 day's worth of a week
+        
+        // 6. Return average
+        return Double(uniqueDays) / weeksPassed
+    }
 }
+
+
+
+struct FullFrequencyView: View {
+    var allStats: [WorkoutStat]
+    
+    // 1. Sort all data, remove 0s if you want
+    var sortedStats: [WorkoutStat] {
+        allStats
+            .filter { $0.frequency > 0 } // Optional: Hide exercises never done
+            .sorted { $0.frequency > $1.frequency }
+    }
+    
+    // 2. Calculate height: 50pts per bar, but at least screen height so it looks full
+    var chartHeight: CGFloat {
+        let calculated = CGFloat(sortedStats.count * 50)
+        return max(calculated, 400)
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading) {
+                Text("All Exercises by Frequency")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom)
+                
+                Chart(sortedStats, id: \.workoutName) { stat in
+                    BarMark(
+                        x: .value("Count", stat.frequency),
+                        y: .value("Exercise", stat.workoutName)
+                    )
+                    .foregroundStyle(by: .value("Exercise", stat.workoutName))
+                    .cornerRadius(4)
+                    .annotation(position: .trailing) {
+                        Text("\(stat.frequency)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                // 3. Apply the dynamic height here
+                .frame(height: chartHeight)
+                // 4. Optimization: Fix the X axis so it doesn't jump around
+                .chartXAxis { AxisMarks(position: .top) }
+                .chartLegend(.hidden) // Legend is redundant here
+            }
+            .padding()
+        }
+        .navigationTitle("Exercise Frequency")
+        .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGroupedBackground))
+    }
+}
+
+
+
 
 //#Preview {
 //    StatsView(allWorkoutOptions: [WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)])

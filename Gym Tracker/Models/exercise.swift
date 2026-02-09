@@ -51,6 +51,10 @@ class Exercise{
     func getImageData() -> Data?{
         return self.sourceWorkout?.imageData
     }
+
+    func getTimerSeconds() -> Double {
+        return self.sourceWorkout?.timerSeconds ?? 90
+    }
     
     func getCategory() -> WorkoutCategory{
         return self.sourceWorkout?.category ?? WorkoutCategory.chest
@@ -117,6 +121,7 @@ class WorkoutOption {
     var imageData: Data?
     var isBarbellWeight: Bool = false
     var lastUpdated: Date = Date()
+    var timerSeconds: Double = 90
     
     @Relationship(deleteRule: .nullify, inverse: \Exercise.sourceWorkout)
         var exercises: [Exercise]?

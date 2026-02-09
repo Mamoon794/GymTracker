@@ -135,27 +135,32 @@ struct WorkoutSettingsView: View {
 
 
 struct WorkoutDetailView: View {
-    @Bindable var workoutOption: WorkoutOption // Changed to @Bindable for easier binding
+    @Bindable var workoutOption: WorkoutOption
     @Environment(\.modelContext) private var modelContext
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isLoadingImage = false
+    @State private var isEditingTimer = false
+    
+    // 1. Add State to hold the loaded image
+    @State private var loadedImage: UIImage?
 
     var body: some View {
         List {
             Section("Exercise Details") {
                 HStack {
-                    // 1. Display the Custom Image or System Icon
-                    if let data = workoutOption.imageData, let uiImage = UIImage(data: data) {
+                    // 2. Use the State variable (Fast) instead of converting Data (Slow)
+                    if let uiImage = loadedImage {
                         Image(uiImage: uiImage)
                             .resizable()
                             .scaledToFill()
                             .frame(width: 40, height: 40)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     } else {
+                        // Fallback System Icon
                         Image(systemName: workoutOption.image)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 32, height: 32) // Keep system icon slightly smaller
+                            .frame(width: 32, height: 32)
                             .foregroundStyle(.blue)
                     }
                     
@@ -163,7 +168,6 @@ struct WorkoutDetailView: View {
                         get: { workoutOption.name },
                         set: { newName in
                             workoutOption.name = newName
-                            // Update stats name as well
                             workoutOption.stats?.workoutName = newName
                         }
                     ))
@@ -174,8 +178,7 @@ struct WorkoutDetailView: View {
 
             Section("Image") {
                 HStack {
-                    // Show current image preview
-                    if let data = workoutOption.imageData, let uiImage = UIImage(data: data) {
+                    if let uiImage = loadedImage {
                         Image(uiImage: uiImage)
                             .resizable()
                             .scaledToFill()
@@ -194,6 +197,7 @@ struct WorkoutDetailView: View {
                             Button(role: .destructive) {
                                 withAnimation {
                                     workoutOption.imageData = nil
+                                    loadedImage = nil // Clear state immediately
                                 }
                                 try? modelContext.save()
                             } label: {
@@ -214,6 +218,7 @@ struct WorkoutDetailView: View {
                 }
             }
             
+            // ... (Category and Equipment sections remain the same) ...
             Section("Category") {
                 Picker("Category", selection: $workoutOption.category) {
                     ForEach(WorkoutCategory.allCases) { cat in
@@ -232,16 +237,34 @@ struct WorkoutDetailView: View {
                     Label("Barbell Weight", systemImage: "dumbbell.fill")
                 }
             }
+
+            // 3. Add your Rest Timer Section here properly
+            restTimerSection
         }
         .navigationTitle(workoutOption.name)
         .navigationBarTitleDisplayMode(.inline)
-        // Auto-save triggers
         
-        .onDisappear {
-            try? modelContext.save()
+        // 4. Load the image when view appears
+        .onAppear {
+            if let data = workoutOption.imageData {
+                self.loadedImage = UIImage(data: data)
+            }
         }
+        // 5. Update image if the underlying data changes (e.g. undo/redo)
+        .onChange(of: workoutOption.imageData) { _, newData in
+            if let data = newData {
+                self.loadedImage = UIImage(data: data)
+            } else {
+                self.loadedImage = nil
+            }
+        }
+        
+        // Auto-save triggers
+        .onDisappear { try? modelContext.save() }
         .onChange(of: workoutOption.category) { _, _ in try? modelContext.save() }
         .onChange(of: workoutOption.isBarbellWeight) { _, _ in try? modelContext.save() }
+        // 6. FIX: Add the missing dot (.) here
+        .onChange(of: workoutOption.timerSeconds) { _, _ in try? modelContext.save() }
     }
 
     private func uploadImage(_ item: PhotosPickerItem?) {
@@ -249,20 +272,19 @@ struct WorkoutDetailView: View {
         isLoadingImage = true
         
         Task {
-            // 1. Load the raw data
             if let data = try? await item.loadTransferable(type: Data.self),
                let uiImage = UIImage(data: data) {
                 
-                // 2. Resize and Compress
-                // This ensures the image is exactly 40x40 points (so 80x80 or 120x120 pixels on Retina)
                 if let compressedData = resizeAndCompressImage(image: uiImage, targetSize: CGSize(width: 40, height: 40)) {
                     
                     await MainActor.run {
-                        // 3. Save to Model
+                        // Update Model
                         workoutOption.imageData = compressedData
+                        // Update View State immediately so UI feels snappy
+                        loadedImage = UIImage(data: compressedData) 
                         try? modelContext.save()
                         isLoadingImage = false
-                        selectedPhotoItem = nil // Reset picker
+                        selectedPhotoItem = nil
                     }
                 }
             } else {
@@ -270,17 +292,123 @@ struct WorkoutDetailView: View {
             }
         }
     }
+
+    private var restTimerSection: some View {
+        Section("Rest Timer") {
+            // 1. The Display Row (Clickable)
+            Button {
+                withAnimation {
+                    isEditingTimer.toggle() // You need to add this State variable
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "timer")
+                        .foregroundStyle(.blue)
+                    
+                    Text("Rest Duration")
+                        .foregroundStyle(.primary)
+                    
+                    Spacer()
+                    
+                    // Shows "1m 30s" normally, turns blue when editing
+                    Text(formatDuration(workoutOption.timerSeconds))
+                        .font(.body.bold())
+                        .foregroundStyle(isEditingTimer ? .blue : .secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(isEditingTimer ? Color.blue.opacity(0.1) : Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            .buttonStyle(.plain) // Removes standard button fading
+            
+            // 2. The Wheel Picker (Conditional)
+            if isEditingTimer {
+                HStack {
+                    Spacer()
+                    TimerWheelPicker(seconds: $workoutOption.timerSeconds)
+                    Spacer()
+                }
+                // Ensure data saves when we stop scrolling
+                .onChange(of: workoutOption.timerSeconds) { _, _ in
+                    try? modelContext.save()
+                }
+            }
+        }
+    }
     
-    // Helper function to resize image to save space
+    private func formatDuration(_ seconds: Double) -> String {
+        if seconds == 0 { return "Off" }
+        let totalSeconds = Int(seconds)
+        let min = totalSeconds / 60
+        let sec = totalSeconds % 60
+        if min > 0 {
+            return sec > 0 ? "\(min)m \(sec)s" : "\(min)m"
+        } else {
+            return "\(sec)s"
+        }
+    }
+    
     private func resizeAndCompressImage(image: UIImage, targetSize: CGSize) -> Data? {
         let renderer = UIGraphicsImageRenderer(size: targetSize)
-        
         let resizedImage = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: targetSize))
         }
-        
-        // Convert to JPEG with 0.7 compression (good balance of quality/size)
         return resizedImage.jpegData(compressionQuality: 0.7)
+    }
+}
+
+
+struct TimerWheelPicker: View {
+    @Binding var seconds: Double
+    
+    // Convert total seconds to minutes index (0-10)
+    private var minutesBinding: Binding<Int> {
+        Binding(
+            get: { Int(seconds) / 60 },
+            set: { newMinute in
+                let currentSeconds = Int(seconds) % 60
+                seconds = Double((newMinute * 60) + currentSeconds)
+            }
+        )
+    }
+    
+    // Convert total seconds to seconds index (0-59)
+    private var secondsBinding: Binding<Int> {
+        Binding(
+            get: { Int(seconds) % 60 },
+            set: { newSecond in
+                let currentMinutes = Int(seconds) / 60
+                seconds = Double((currentMinutes * 60) + newSecond)
+            }
+        )
+    }
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // MINUTES WHEEL
+            Picker("Minutes", selection: minutesBinding) {
+                ForEach(0..<11) { min in 
+                    Text("\(min) min").tag(min)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(width: 100)
+            .clipped() // Keeps the wheel from overlapping
+            
+            // SECONDS WHEEL
+            Picker("Seconds", selection: secondsBinding) {
+                // You can change `0..<60` to `stride(from: 0, to: 60, by: 15)`
+                // if you only want 0, 15, 30, 45 options.
+                ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { sec in
+                    Text("\(sec) sec").tag(sec)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(width: 100)
+            .clipped()
+        }
+        .frame(height: 150) // Restrict height so it doesn't expand too much
     }
 }
 
@@ -452,6 +580,5 @@ struct RoutineDetailView: View {
         try? modelContext.save()
     }
 }
-
 
 

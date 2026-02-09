@@ -14,6 +14,7 @@ struct ExerciseDetailView: View {
     @State private var showHistory = false
     @State private var showPlateCalc: Bool = false
     @FocusState private var focusedField: FocusedField?
+    @Environment(RestTimerManager.self) var timerManager
     
     var isBarbell: Bool {
         exercise.getIsBarbellWeight()
@@ -40,71 +41,75 @@ struct ExerciseDetailView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 2)
-        List {
-            Section(header: Text("Sets")) {
-                ForEach(sortedIndices, id: \.self) { idx in
-                    ExerciseRow(
-                        setNumber: exercise.sets[idx].orderIndex + 1,
-                        set: $exercise.sets[idx],
-                        exercise: exercise,
-                        showPlateCalc: showPlateCalc
-                    )
+        VStack {
+            List {
+                Section(header: Text("Sets")) {
+                    ForEach(sortedIndices, id: \.self) { idx in
+                        ExerciseRow(
+                            setNumber: exercise.sets[idx].orderIndex + 1,
+                            set: $exercise.sets[idx],
+                            exercise: exercise,
+                            showPlateCalc: showPlateCalc
+                        )
+                    }
+                    .onDelete(perform: deleteSet)
+                    .onMove(perform: move)
                 }
-                .onDelete(perform: deleteSet)
-                .onMove(perform: move)
-            }
-            
+                
 
-            Section(header: Text("Add Set")) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        TextField("Reps", text: $newReps).keyboardType(.numberPad)
-                            .focused($focusedField, equals: .reps)
-                        
-                        TextField(useKg ? "Weight (kg)" : "Weight (lbs)", text: $newWeight).keyboardType(.decimalPad)
-                        .focused($focusedField, equals: .weight)
-                        .toolbar {
-                            ToolbarItemGroup(placement: .keyboard) {
-                                // 3. Only show content if Weight is focused
-                                if focusedField == .weight {
-                                    Spacer()
-                                    
-                                    Button("+") { newWeight += "+" }
-                                    Button("-") { newWeight += "-" }
-                                    Button("*") { newWeight += "*" }
-                                    Button("/") { newWeight += "/" }
-                                    
-                                    Button("Done") {
-                                        focusedField = nil // Clean way to dismiss keyboard
+                Section(header: Text("Add Set")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            TextField("Reps", text: $newReps).keyboardType(.numberPad)
+                                .focused($focusedField, equals: .reps)
+                            
+                            TextField(useKg ? "Weight (kg)" : "Weight (lbs)", text: $newWeight).keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .weight)
+                            .toolbar {
+                                ToolbarItemGroup(placement: .keyboard) {
+                                    // 3. Only show content if Weight is focused
+                                    if focusedField == .weight {
+                                        Spacer()
+                                        
+                                        Button("+") { newWeight += "+" }
+                                        Button("-") { newWeight += "-" }
+                                        Button("*") { newWeight += "*" }
+                                        Button("/") { newWeight += "/" }
+                                        
+                                        Button("Done") {
+                                            focusedField = nil // Clean way to dismiss keyboard
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    HStack(spacing: 20) {
-                        // Toggle for Lbs vs Kg
-                        Toggle("Use KG", isOn: $useKg).labelsHidden()
-                        Text("KG").font(.caption).bold()
+                        HStack(spacing: 20) {
+                            // Toggle for Lbs vs Kg
+                            Toggle("Use KG", isOn: $useKg).labelsHidden()
+                            Text("KG").font(.caption).bold()
 
-                        Divider().frame(height: 20)
+                            Divider().frame(height: 20)
 
-                        // The "Tick Mark" for Barbell formula
-                        if (isBarbell){
-                            Label("Is Barbell Weight", systemImage: "dumbbell.fill")
-                                .foregroundStyle(.emerald500)
+                            // The "Tick Mark" for Barbell formula
+                            if (isBarbell){
+                                Label("Is Barbell Weight", systemImage: "dumbbell.fill")
+                                    .foregroundStyle(.emerald500)
+                            }
                         }
-                    }
 
-                    Button(action: addSet) {
-                        Text("Add Set")
-                            .frame(maxWidth: .infinity)
+                        Button(action: addSet) {
+                            Text("Add Set")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canAdd)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!canAdd)
+                    
                 }
-                
             }
+            RestTimerOverlay(manager: timerManager)
+                .padding(.bottom, 20)
         }
         .navigationTitle(exercise.getName())
         .toolbar {
@@ -154,23 +159,27 @@ struct ExerciseDetailView: View {
     private func addSet() {
         guard let reps = Int(newReps) else { return }
         
-        var weight = parseWeight(newWeight) ?? 0.0
+        let weight = parseWeight(newWeight) ?? 0.0
+        var final_weight = weight
         
         if useKg{
-            weight = weight * 2.205
+            final_weight = weight * 2.205
         }
         if isBarbell{
-            weight = (weight * 2) + 45
+            final_weight = (weight * 2) + 45
         }
         
-        let newSet = ExerciseSet(reps: reps, weight: weight, orderIndex: exercise.totalSets)
+        let newSet = ExerciseSet(reps: reps, weight: final_weight, orderIndex: exercise.totalSets)
         exercise.sets.append(newSet)
         
         newReps = ""
-        if (weight == 0){
+        newWeight = String(format: "%.1f", weight)
+        if (final_weight == 0){
             newWeight = ""
         }
         
+        
+        timerManager.start(seconds: exercise.getTimerSeconds(), exerciseName: exercise.getName())
         exercise.getSourceWorkout().lastUpdated = Date.now
     }
     
