@@ -17,9 +17,23 @@ struct StatsView: View {
     @AppStorage("lastSelectedWorkout") private var selectedWorkoutName: String = "Bench Press"
     @Environment(\.modelContext) var modelContext
     @State private var showSelectionSheet = false
+    
+    @Query(sort: [SortDescriptor(\MonthlyWorkout.year, order: .forward), SortDescriptor(\MonthlyWorkout.month, order: .forward)]) 
+    private var monthlyWorkouts: [MonthlyWorkout]
 
     private var totalExercises: Int {
         allStats.reduce(0) { $0 + $1.totalExercises }
+    }
+    
+    private var currentMonthSummary: MonthlyWorkout? {
+        let currentMonth = Calendar.current.component(.month, from: Date())
+        let currentYear = Calendar.current.component(.year, from: Date())
+        
+        return monthlyWorkouts.first(where: { $0.month == currentMonth && $0.year == currentYear })
+    }
+
+    private var totalDays: Int {
+        return monthlyWorkouts.reduce(0) { $0 + $1.totalDays }
     }
 
     
@@ -85,11 +99,11 @@ struct StatsView: View {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
                         statSummaryCard(
                             label: "Exercises Per Day",
-                            value: String(format: "%.1f", Double(totalExercises)/Double(calculateTotalDays())),
+                            value: String(format: "%.1f", Double(totalExercises)/Double(totalDays)),
                             color: .blue
                         )
                         statSummaryCard(
-                            label: "Weeks Per Month",
+                            label: "Days per Week",
                             value: String(format: "%.1f", calculateMonthlyFrequency()),
                             color: .blue
                         )
@@ -100,7 +114,7 @@ struct StatsView: View {
                         )
                         statSummaryCard(
                             label: "Total Days",
-                            value: "\(calculateTotalDays())",
+                            value: "\(totalDays)",
                             color: .blue
                         )
                         statSummaryCard(
@@ -115,8 +129,7 @@ struct StatsView: View {
             .navigationTitle("Statistics")
             .background(Color(.systemGroupedBackground))
             .onAppear {
-                Task{
-                    
+                Task{                    
                     for stats in allStats{
                         stats.updateData()
                     }
@@ -160,6 +173,8 @@ struct StatsView: View {
     private func oneRepMaxLineChart(stat: WorkoutStat) -> some View {
         
         let data = stat.oneRepMaxHistory
+
+        let maxWeightValue = stat.maxWeightStat?.weightValue ?? 0
         
         return Chart {
             ForEach(data, id: \.date) { item in
@@ -182,6 +197,24 @@ struct StatsView: View {
                             .font(.system(.caption, design: .rounded).bold())
                             .foregroundStyle(.secondary)
                     }
+                }
+            }
+            
+            if maxWeightValue > 0 {
+                RuleMark(
+                    y: .value("Max Weight", maxWeightValue)
+                )
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5])) // Dashed line
+                .foregroundStyle(.blue.opacity(0.5))
+                
+                .annotation(position: .top, alignment: .leading) {
+                    Text("PR: \(maxWeightValue, specifier: "%.0f")")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.blue)
+                        .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
+                                            .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
+                                            .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
+                        .padding(2)
                 }
             }
         }
@@ -217,51 +250,41 @@ struct StatsView: View {
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
-    
-    func calculateTotalDays() -> Int {
-        var allDates: [Date] = []
-
-        
-        for stat in allStats {
-            let exercises = stat.sourceWorkout.getExercises()
-            
-            let dates = exercises.map { $0.date }
-            allDates.append(contentsOf: dates)
-        }
-
-        let uniqueDays = Set(allDates.map { Calendar.current.startOfDay(for: $0) })
-
-        return uniqueDays.count
-    }
 
 
     func calculateMonthlyFrequency() -> Double {
         let calendar = Calendar.current
         let now = Date.now
         
-        // 1. Get the start of the current month (e.g., Nov 1st, 00:00)
-        guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) else { return 0.0 }
-        
-        // 2. Gather all workout dates
-        var allDates: [Date] = []
-        for stat in allStats {
-            let exercises = stat.sourceWorkout.getExercises()
-            allDates.append(contentsOf: exercises.map { $0.date })
+
+        guard let firstMonth = monthlyWorkouts.min(by: { 
+            ($0.year, $0.month) < ($1.year, $1.month) 
+        }) else {
+            return 0.0 
         }
         
-        // 3. Filter for only dates in THIS month
-        let thisMonthDates = allDates.filter { $0 >= startOfMonth }
+        // 2. Create a Date object for the 1st day of that starting month
+        var components = DateComponents()
+        components.year = firstMonth.year
+        components.month = firstMonth.month
+        components.day = 1
         
-        // 4. Count unique calendar days
-        let uniqueDays = Set(thisMonthDates.map { calendar.startOfDay(for: $0) }).count
+        // Fallback to 'now' if date creation fails (prevents crash)
+        let startDate = calendar.date(from: components) ?? now
         
-        // 5. Calculate how many weeks have passed in this month
-        // We use max(1 day, time) to prevent division by zero or huge numbers on the 1st of the month
-        let daysSinceStart = calendar.dateComponents([.day], from: startOfMonth, to: now).day ?? 1
-        let weeksPassed = max(Double(daysSinceStart) / 7.0, 0.14) // 0.14 is approx 1 day's worth of a week
+        // 3. Calculate Weeks Passed (Total Lifespan)
+        let daysSinceStart = calendar.dateComponents([.day], from: startDate, to: now).day ?? 1
         
-        // 6. Return average
-        return Double(uniqueDays) / weeksPassed
+
+        let weeksPassed = max(Double(daysSinceStart) / 7.0, 0.14)
+        
+
+        let totalUniqueDays = monthlyWorkouts.reduce(0) { total, summary in
+            total + summary.totalDays
+        }
+        
+
+        return Double(totalUniqueDays) / weeksPassed
     }
 }
 
@@ -324,3 +347,4 @@ struct FullFrequencyView: View {
 //#Preview {
 //    StatsView(allWorkoutOptions: [WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon)])
 //}
+

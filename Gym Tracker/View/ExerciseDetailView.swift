@@ -26,8 +26,32 @@ struct ExerciseDetailView: View {
         }
     }
     
+    
     var body: some View {
         HStack{
+            if isMaxWeightRecord(exercise) {
+                Text("PR")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                
+            }
+            if isOneRepMaxRecord(exercise) {
+                Text("1RM")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color(red: 0.8, green: 0.6, blue: 0.0))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color.yellow.opacity(0.25))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                
+            }
+            
+            Spacer()
+            
             if (isBarbell){
                 Spacer()
                 Toggle(isOn: $showPlateCalc) {
@@ -178,9 +202,11 @@ struct ExerciseDetailView: View {
             newWeight = ""
         }
         
+        if exercise.getSourceWorkout()?.showTimer ?? false{
+            timerManager.start(seconds: exercise.getTimerSeconds(), exerciseName: exercise.getName())
+        }
+        exercise.updateData()
         
-        timerManager.start(seconds: exercise.getTimerSeconds(), exerciseName: exercise.getName())
-        exercise.getSourceWorkout().lastUpdated = Date.now
     }
     
     private func deleteSet(at offsets: IndexSet) {
@@ -190,7 +216,7 @@ struct ExerciseDetailView: View {
         }
         
         exercise.synchronizeIndices()
-        exercise.getSourceWorkout().lastUpdated = Date.now
+        exercise.updateData()
     }
 
     private func parseWeight(_ input: String) -> Double? {
@@ -257,7 +283,7 @@ struct ExerciseRow: View {
             }
             .frame(maxWidth: 170)
             .onChange(of: set.reps) { _, _ in
-                exercise.getSourceWorkout().lastUpdated = Date.now
+                exercise.updateData()
             }
             
             Spacer()
@@ -276,7 +302,7 @@ struct ExerciseRow: View {
     
     private func updateWeight(_ weight: Double){
         set.weight += weight
-        exercise.getSourceWorkout().lastUpdated = Date.now
+        exercise.updateData()
         
     }
 }

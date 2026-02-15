@@ -295,6 +295,9 @@ struct WorkoutDetailView: View {
 
     private var restTimerSection: some View {
         Section("Rest Timer") {
+            Toggle(isOn: $workoutOption.showTimer) {
+                Label("Show Timer", systemImage: "timer.circle.fill")
+            }
             // 1. The Display Row (Clickable)
             Button {
                 withAnimation {

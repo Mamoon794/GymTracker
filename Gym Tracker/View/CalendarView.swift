@@ -9,12 +9,18 @@ import SwiftUI
 import SwiftData
 
 
+struct DaySection: Identifiable {
+    let id = UUID()
+    let date: Date
+    let dailyGroups: [Exercise] // Variable name matches your UI code
+}
+
 
 struct CalendarView: View {
-    @Query(sort: \Exercise.date, order: .reverse) private var allExercises: [Exercise]
+    @Query(sort: [SortDescriptor(\MonthlyWorkout.year, order: .forward), SortDescriptor(\MonthlyWorkout.month, order: .forward)]) 
+    private var monthlyWorkouts: [MonthlyWorkout]
     
-//    var allExercises: [Exercise] = [Exercise(sourceWorkout: WorkoutOption(name: "Chest", category: WorkoutCategory.chest, image: WorkoutCategory.chest.icon), theDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 25)) ?? .now)]
-//    
+
     @State private var selectedDate: DateComponents? = Calendar.current.dateComponents([.day, .month, .year], from: .now)
     @Binding var isBarHidden: Bool
     
@@ -23,14 +29,7 @@ struct CalendarView: View {
     @Environment(\.modelContext) private var modelContext
     
 
-    // 1. Filter the list based on search text
-    var searchedExercises: [Exercise] {
-        if searchText.isEmpty {
-            return allExercises
-        } else {
-            return allExercises.filter { $0.getName().localizedCaseInsensitiveContains(searchText) }
-        }
-    }
+
         
     enum ViewMode: String, CaseIterable {
         case calendar = "Calendar"
@@ -40,30 +39,62 @@ struct CalendarView: View {
     // Filter exercises based on the selected calendar day
     var filteredExercises: [Exercise] {
         guard let selectedDate = selectedDate?.date else { return [] }
-        return allExercises.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+        return monthlyWorkouts.flatMap { $0.getExercises(date: selectedDate) }
     }
     
-    var groupedByDate: [(date: Date, exercises: [Exercise])] {
-        let grouped = Dictionary(grouping: searchedExercises) { (exercise) -> Date in
-            Calendar.current.startOfDay(for: exercise.date)
+    var historyData: [DaySection] {
+        var allDays: [DaySection] = []
+        
+        // Iterate through all months to gather exercises
+        for summary in monthlyWorkouts {
+            // A. Filter exercises by search text
+            let matches = summary.exercises.filter { exercise in
+                searchText.isEmpty ||
+                exercise.getName().localizedCaseInsensitiveContains(searchText)
+            }
+            
+            if matches.isEmpty { continue }
+            
+            // B. Group this month's exercises by Day
+            let groupedByDay = Dictionary(grouping: matches) { exercise in
+                Calendar.current.startOfDay(for: exercise.date)
+            }
+            
+            // C. Convert to DaySection objects
+            let days = groupedByDay.map { (date, exercises) in
+                // We use 'dailyGroups' as the variable name because your UI code uses it
+                DaySection(date: date, dailyGroups: exercises)
+            }
+            
+            allDays.append(contentsOf: days)
         }
-        // Sort so the most recent dates appear first
-        return grouped.map { (date: $0.key, exercises: $0.value) }
-                      .sorted { $0.date > $1.date }
+        
+        // D. Sort all days (Newest first)
+        return allDays.sorted { $0.date > $1.date }
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 if viewMode == .calendar {
-                    WorkoutCalendar(exercises: allExercises, selectedDate: $selectedDate)
+                    WorkoutCalendar(monthlyWorkouts: monthlyWorkouts, selectedDate: $selectedDate)
                         .padding(.horizontal, 5)
                         .frame(height: 490)
             
                     if (isBarHidden){
                         List {
                             
-                            Section("Workouts for \(selectedDate?.date?.formatted(date: .abbreviated, time: .omitted) ?? "")") {
+                            Section(header: HStack {
+                                Text("Workouts for \(selectedDate?.date?.formatted(date: .abbreviated, time: .omitted) ?? "")")
+                                Spacer()
+                                Text("\(filteredExercises.count)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.blue.gradient)
+                                    .clipShape(Capsule())
+                            }) {
                                 if filteredExercises.isEmpty {
                                     ContentUnavailableView("No Workouts", systemImage: "dumbbell", description: Text("Rest day!"))
                                 } else {
@@ -82,16 +113,27 @@ struct CalendarView: View {
                     
                 } else {
                     List {
-                        ForEach(groupedByDate, id: \.date) { group in
-                            Section(header: Text(group.date.formatted(date: .abbreviated, time: .omitted))) {
-                                ForEach(group.exercises) { exercise in
+                        ForEach(historyData, id: \.date) { group in
+                            Section(header: HStack {
+                                Text(group.date.formatted(date: .abbreviated, time: .omitted))
+                                Spacer()
+                                Text("\(group.dailyGroups.count)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.blue.gradient)
+                                    .clipShape(Capsule())
+                            }) {
+                                
+                                ForEach(group.dailyGroups) { exercise in
                                     ExerciseRowNav(exercise: exercise)
                                 }
                             }
                         }
                     }
                     .listStyle(.insetGrouped)
-                    // 🎯 Native Search: Handles animations and focus automatically
+                    
                     .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
                     
                 }
@@ -144,7 +186,7 @@ struct CalendarView: View {
 
 
 struct WorkoutCalendar: UIViewRepresentable {
-    let exercises: [Exercise]
+    let monthlyWorkouts: [MonthlyWorkout]
     @Binding var selectedDate: DateComponents?
 
     func makeUIView(context: Context) -> UICalendarView {
@@ -163,8 +205,13 @@ struct WorkoutCalendar: UIViewRepresentable {
 
     func updateUIView(_ uiView: UICalendarView, context: Context) {
         // Refresh decorations if data changes
-        let workoutDates = exercises.map { Calendar.current.dateComponents([.year, .month, .day], from: $0.date) }
-        uiView.reloadDecorations(forDateComponents: workoutDates, animated: true)
+        let allDates = monthlyWorkouts.flatMap { summary in
+            summary.exercises.map {
+                Calendar.current.dateComponents([.year, .month, .day], from: $0.date)
+            }
+        }
+        
+        uiView.reloadDecorations(forDateComponents: allDates, animated: true)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -181,9 +228,21 @@ struct WorkoutCalendar: UIViewRepresentable {
 
         // Add a dot to days with workouts
         func calendarView(_ calendarView: UICalendarView, decorationFor dateComponents: DateComponents) -> UICalendarView.Decoration? {
-            let hasWorkout = parent.exercises.contains {
-                Calendar.current.isDate($0.date, inSameDayAs: dateComponents.date ?? Date.distantPast)
+            guard let year = dateComponents.year,
+                              let month = dateComponents.month,
+                              let day = dateComponents.day else { return nil }
+            
+            guard let monthSummary = parent.monthlyWorkouts.first(where: {
+                $0.year == year && $0.month == month
+            }) else {
+                return nil
             }
+            
+            let hasWorkout = monthSummary.exercises.contains { exercise in
+                let exerciseDay = Calendar.current.component(.day, from: exercise.date)
+                return exerciseDay == day
+            }
+
             return hasWorkout ? .default(color: .systemGreen, size: .medium) : nil
         }
 

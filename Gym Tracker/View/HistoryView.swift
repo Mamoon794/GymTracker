@@ -16,15 +16,39 @@ struct ExerciseHistorySheet: View {
         NavigationStack {
             List {
                 // 1. Call your method directly
-                let history = exercise.getSourceWorkout().getExercises().sorted(by: { $0.date > $1.date })
+                let history = exercise.getSourceWorkout()?.getExercises().sorted(by: { $0.date > $1.date }) ?? []
                 
                 if history.isEmpty{
                     ContentUnavailableView("No History", systemImage: "dumbbell")
                 } else {
                     ForEach(history) { record in
-                        Section(header: Text(record.date.formatted(date: .abbreviated, time: .omitted))
-                            .fontWeight(Calendar.current.isDate(record.date, inSameDayAs: exercise.date) ? .bold : .regular)
-                        ) {
+                        Section(header: HStack{
+                            Text(record.date.formatted(date: .abbreviated, time: .omitted))
+                                .fontWeight(Calendar.current.isDate(record.date, inSameDayAs: exercise.date) ? .bold : .regular)
+                            
+                            Spacer()
+
+                            if isMaxWeightRecord(record) {
+                                Text("PR")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.orange)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.orange.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                
+                            }
+                            if isOneRepMaxRecord(record) {
+                                Text("1RM")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(Color(red: 0.8, green: 0.6, blue: 0.0))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Color.yellow.opacity(0.25))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                
+                            }
+                        }) {
                             
                             ForEach(sortIndices(sets: record.sets)) { set in
                                 HStack {

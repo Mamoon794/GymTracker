@@ -42,6 +42,20 @@ func triggerSuccessHaptic() {
     generator.impactOccurred()
 }
 
+func isMaxWeightRecord(_ exercise: Exercise) -> Bool {
+    guard let stats = exercise.getWorkoutStat(),
+            let globalMaxSet = stats.maxWeightStat else { return false }
+    
+    return exercise.id == globalMaxSet.id
+}
+
+func isOneRepMaxRecord(_ exercise: Exercise) -> Bool {
+    guard let stats = exercise.getWorkoutStat(),
+            let globalPRSet = stats.maxOneRepStat else { return false }
+    
+    return exercise.id == globalPRSet.id
+}
+
 struct ExerciseRowNav: View{
     let exercise: Exercise
     @Environment(\.modelContext) private var modelContext
@@ -91,11 +105,36 @@ struct ExerciseRowNav: View{
             VStack(alignment: .leading, spacing: 4) {
                 Text(exercise.getName())
                     .font(.headline)
+                
                 Text("Sets: \(exercise.totalSets)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            
+            HStack{
+                if isMaxWeightRecord(exercise) {
+                    Text("PR")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    
+                }
+                if isOneRepMaxRecord(exercise) {
+                    Text("1RM")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color(red: 0.8, green: 0.6, blue: 0.0)) 
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.yellow.opacity(0.25))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    
+                }
+            }
+            .id(exercise.getSourceWorkout()?.lastUpdated ?? Date())
         }
         .padding(.vertical, 6)
     }
@@ -125,11 +164,7 @@ func exerciseIcon(imageData: Data?, iconName: String) -> some View {
 
 
 
-
 struct ImageGenerator {
-    
-    
-    
     
     static func processResult(from url: URL, for option: WorkoutOption) {
         do {
@@ -145,3 +180,50 @@ struct ImageGenerator {
 
 
 
+enum DataMigrator {
+    static func fixMissingMonths(context: ModelContext) {
+        let predicate = #Predicate<Exercise> { exercise in
+            exercise.monthly == nil
+        }
+        
+        let descriptor = FetchDescriptor(predicate: predicate)
+        
+        guard let orphans = try? context.fetch(descriptor), !orphans.isEmpty else {
+            return // Nothing to fix
+        }
+        
+        print("Found \(orphans.count) exercises with missing months. Fixing...")
+        
+        // 3. Cache existing months
+        var monthCache: [String: MonthlyWorkout] = [:]
+        
+        let monthDescriptor = FetchDescriptor<MonthlyWorkout>()
+        if let existingMonths = try? context.fetch(monthDescriptor) {
+            for m in existingMonths {
+                monthCache[m.idString] = m
+            }
+        }
+        
+        // 4. Assign orphans
+        for exercise in orphans {
+            let calendar = Calendar.current
+            let year = calendar.component(.year, from: exercise.date)
+            let month = calendar.component(.month, from: exercise.date)
+            let key = "\(year)-\(month)"
+            
+            if let existing = monthCache[key] {
+                exercise.monthly = existing
+            } else {
+                let newMonth = MonthlyWorkout(date: exercise.date)
+                context.insert(newMonth)
+                
+                exercise.monthly = newMonth
+                
+                monthCache[key] = newMonth
+            }
+        }
+        
+        try? context.save()
+        print("Fixed all missing months.")
+    }
+}

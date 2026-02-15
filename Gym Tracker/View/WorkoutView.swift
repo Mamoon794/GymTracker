@@ -23,13 +23,46 @@ struct WorkoutView: View {
         VStack(spacing: 0) {
             
             RoutinePickerView(routines: routines)
-            
-            
-            List(exercises) { exercise in
-                ExerciseRowNav(exercise: exercise)
+            List {
+                // 3. Section Header with Dynamic Count
+                Section {
+                    if exercises.isEmpty {
+                        ContentUnavailableView(
+                            "No Exercises Yet",
+                            systemImage: "dumbbell",
+                            description: Text("Start a routine or add an exercise to begin.")
+                        )
+                        .listRowBackground(Color.clear)
+                        .frame(height: 200)
+                    } else {
+                        ForEach(exercises) { exercise in
+                            ExerciseRowNav(exercise: exercise)
+                        }
+                    }
+                } header: {
+                    HStack {
+                        
+                        
+                        Spacer()
+                        
+                        // THE COUNT BADGE
+                        Text("\(exercises.count)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.gradient)
+                            .clipShape(Capsule())
+                    }
+                    .padding(.vertical, 4)
+                    .textCase(nil) // Keeps text from being forced Uppercase
+                }
             }
             .listStyle(.insetGrouped)
+            
+            
         }
+        .background(Color(.systemGroupedBackground))
     }
     
 }

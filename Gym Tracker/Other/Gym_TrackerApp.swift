@@ -13,6 +13,24 @@ import ActivityKit
 struct Gym_TrackerApp: App {
     @State private var timerManager = RestTimerManager()
 
+    var sharedModelContainer: ModelContainer = {
+        let schema = Schema([
+            WorkoutOption.self,
+            Exercise.self,
+            WorkoutStat.self,
+            WorkoutRoutine.self,
+            RoutineItem.self,
+            MonthlyWorkout.self,
+        ])
+        let modelConfiguration = ModelConfiguration(schema: schema)
+
+        do {
+            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+        } catch {
+            fatalError("Could not create ModelContainer: \(error)")
+        }
+    }()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -27,8 +45,11 @@ struct Gym_TrackerApp: App {
             } message: {
                 Text("Get ready for your next set!")
             }
+            .onAppear {
+                    DataMigrator.fixMissingMonths(context: sharedModelContainer.mainContext)
+                }
         }
-        .modelContainer(for: [Exercise.self, ExerciseSet.self, WorkoutOption.self, WorkoutStat.self, WorkoutRoutine.self, RoutineItem.self])
+        .modelContainer(sharedModelContainer)
         
 
     }
