@@ -49,6 +49,7 @@ final class DBOperations {
         sourceWork?.lastUpdated = Date.now
         
         modelContext.insert(newExercise)
+        try? modelContext.save()
         
         
     }
@@ -57,6 +58,7 @@ final class DBOperations {
         let newExercise = Exercise(sourceWorkout: workoutOption)
         self.saveExerciseToMonth(exercise: newExercise)
         modelContext.insert(newExercise)
+        try? modelContext.save()
     }
 
 
