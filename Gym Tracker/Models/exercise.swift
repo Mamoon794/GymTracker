@@ -239,6 +239,7 @@ class WorkoutStat {
         let exercises = sourceWorkout.getExercises().sorted{ $0.date < $1.date }
 
         var history: [maxEntries] = []
+        var weightHistory: [maxEntries] = []
 
         for exercise in exercises {
             let current1RM = exercise.oneRepMax
@@ -250,14 +251,18 @@ class WorkoutStat {
                     self.maxOneRepStat = maxOneRepEntry(date: exercise.date, id: exercise.id, oneRepMaxValue: current1RM)
                 }
             }
-
-            if currentMaxWeight > 0 && currentMaxWeight > self.maxWeightStat?.weightValue ?? 0 {
-                self.maxWeightStat = maxWeightEntry(date: exercise.date, id: exercise.id, weightValue: currentMaxWeight)
+            if currentMaxWeight > 0{
+                weightHistory.append(maxEntries(date: exercise.date, max: currentMaxWeight))
+                
+                if currentMaxWeight > self.maxWeightStat?.weightValue ?? 0 {
+                    self.maxWeightStat = maxWeightEntry(date: exercise.date, id: exercise.id, weightValue: currentMaxWeight)
+                }
             }
         }
         
         
         self.oneRepMaxHistory = history
+        self.maxWeightHistory = weightHistory
         
         
         self.frequency = exercises.count

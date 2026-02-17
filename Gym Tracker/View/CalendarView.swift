@@ -17,8 +17,8 @@ struct DaySection: Identifiable {
 
 
 struct CalendarView: View {
-    @Query(sort: [SortDescriptor(\MonthlyWorkout.year, order: .forward), SortDescriptor(\MonthlyWorkout.month, order: .forward)]) 
-    private var monthlyWorkouts: [MonthlyWorkout]
+
+    @Query(sort: \Exercise.date, order: .reverse) var allExercises: [Exercise]
     
 
     @State private var selectedDate: DateComponents? = Calendar.current.dateComponents([.day, .month, .year], from: .now)
@@ -36,48 +36,71 @@ struct CalendarView: View {
         case list = "Exercises"
     }
     
-    // Filter exercises based on the selected calendar day
-    var filteredExercises: [Exercise] {
-        guard let selectedDate = selectedDate?.date else { return [] }
-        return monthlyWorkouts.flatMap { $0.getExercises(date: selectedDate) }
+    var workoutDays: Set<DateComponents> {
+        let components = allExercises.map { exercise in
+            // Ask for Year, Month, Day
+            var dc = Calendar.current.dateComponents([.year, .month, .day], from: exercise.date)
+            
+            dc.isLeapMonth = nil
+            return dc
+        }
+        return Set(components)
     }
     
-    var historyData: [DaySection] {
-        var allDays: [DaySection] = []
+    var filteredExercises: [Exercise] {
+        guard let selectedDate = selectedDate?.date else { return [] }
         
-        // Iterate through all months to gather exercises
-        for summary in monthlyWorkouts {
-            // A. Filter exercises by search text
-            let matches = summary.exercises.filter { exercise in
-                searchText.isEmpty ||
-                exercise.getName().localizedCaseInsensitiveContains(searchText)
-            }
-            
-            if matches.isEmpty { continue }
-            
-            // B. Group this month's exercises by Day
-            let groupedByDay = Dictionary(grouping: matches) { exercise in
-                Calendar.current.startOfDay(for: exercise.date)
-            }
-            
-            // C. Convert to DaySection objects
-            let days = groupedByDay.map { (date, exercises) in
-                // We use 'dailyGroups' as the variable name because your UI code uses it
-                DaySection(date: date, dailyGroups: exercises)
-            }
-            
-            allDays.append(contentsOf: days)
+        return allExercises.filter {
+            Calendar.current.isDate($0.date, inSameDayAs: selectedDate)
+        }
+    }
+    
+    
+    var historyData: [DaySection] {
+        let filtered = searchText.isEmpty ? allExercises : allExercises.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
         }
         
-        // D. Sort all days (Newest first)
-        return allDays.sorted { $0.date > $1.date }
+        if filtered.isEmpty { return [] }
+
+        var sections: [DaySection] = []
+        
+        var currentBatch: [Exercise] = []
+        var currentDate: Date? = nil
+        
+        for exercise in filtered {
+            let exerciseDay = Calendar.current.startOfDay(for: exercise.date)
+            
+            // If it's the first item, set the date
+            if currentDate == nil {
+                currentDate = exerciseDay
+            }
+            
+            // If this exercise belongs to the current batch, add it
+            if exerciseDay == currentDate {
+                currentBatch.append(exercise)
+            } else {
+                if let date = currentDate {
+                    sections.append(DaySection(date: date, dailyGroups: currentBatch))
+                }
+                
+                currentDate = exerciseDay
+                currentBatch = [exercise]
+            }
+        }
+        
+        if let date = currentDate, !currentBatch.isEmpty {
+            sections.append(DaySection(date: date, dailyGroups: currentBatch))
+        }
+        
+        return sections
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 if viewMode == .calendar {
-                    WorkoutCalendar(monthlyWorkouts: monthlyWorkouts, selectedDate: $selectedDate)
+                    WorkoutCalendar(workoutDays: workoutDays, selectedDate: $selectedDate)
                         .padding(.horizontal, 5)
                         .frame(height: 490)
             
@@ -184,9 +207,8 @@ struct CalendarView: View {
 
 
 
-
 struct WorkoutCalendar: UIViewRepresentable {
-    let monthlyWorkouts: [MonthlyWorkout]
+    let workoutDays: Set<DateComponents>
     @Binding var selectedDate: DateComponents?
 
     func makeUIView(context: Context) -> UICalendarView {
@@ -195,28 +217,38 @@ struct WorkoutCalendar: UIViewRepresentable {
         calendarView.locale = .current
         calendarView.fontDesign = .rounded
         
-        // Setup Delegate for decorations and selection
+        // 1. Set the initial selection
         let selection = UICalendarSelectionSingleDate(delegate: context.coordinator)
+        selection.selectedDate = selectedDate 
         calendarView.selectionBehavior = selection
+        
         calendarView.delegate = context.coordinator
+        
+        // 2. Set the visible date to now (or selected date) so it doesn't start in 1970
+        if let date = selectedDate?.date {
+            calendarView.visibleDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        }
         
         return calendarView
     }
 
     func updateUIView(_ uiView: UICalendarView, context: Context) {
-        // Refresh decorations if data changes
-        let allDates = monthlyWorkouts.flatMap { summary in
-            summary.exercises.map {
-                Calendar.current.dateComponents([.year, .month, .day], from: $0.date)
+        // 3. Update the Coordinator's data source first
+        context.coordinator.parent = self
+        
+        // 4. Update the Selection State (Programmatic selection support)
+        if let selection = uiView.selectionBehavior as? UICalendarSelectionSingleDate {
+            if selection.selectedDate != selectedDate {
+                selection.setSelected(selectedDate, animated: true)
             }
         }
         
+        let allDates = Array(workoutDays)
         uiView.reloadDecorations(forDateComponents: allDates, animated: true)
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
-            
     }
 
     class Coordinator: NSObject, UICalendarViewDelegate, UICalendarSelectionSingleDateDelegate {
@@ -226,28 +258,29 @@ struct WorkoutCalendar: UIViewRepresentable {
             self.parent = parent
         }
 
-        // Add a dot to days with workouts
         func calendarView(_ calendarView: UICalendarView, decorationFor dateComponents: DateComponents) -> UICalendarView.Decoration? {
-            guard let year = dateComponents.year,
-                              let month = dateComponents.month,
-                              let day = dateComponents.day else { return nil }
+            // Normalize the components to ensure we match what's in the Set
+            // (The Set contains Year/Month/Day)
+            var searchComponents = DateComponents()
+            searchComponents.year = dateComponents.year
+            searchComponents.month = dateComponents.month
+            searchComponents.day = dateComponents.day
             
-            guard let monthSummary = parent.monthlyWorkouts.first(where: {
-                $0.year == year && $0.month == month
-            }) else {
-                return nil
-            }
+            searchComponents.isLeapMonth = nil
             
-            let hasWorkout = monthSummary.exercises.contains { exercise in
-                let exerciseDay = Calendar.current.component(.day, from: exercise.date)
-                return exerciseDay == day
+            if parent.workoutDays.contains(searchComponents) {
+                return .default(color: .systemGreen, size: .medium)
             }
-
-            return hasWorkout ? .default(color: .systemGreen, size: .medium) : nil
+            return nil
         }
 
         func dateSelection(_ selection: UICalendarSelectionSingleDate, didSelectDate dateComponents: DateComponents?) {
             parent.selectedDate = dateComponents
+        }
+        
+        // Add this to handle "deselection" if user taps the same date again (optional)
+        func dateSelection(_ selection: UICalendarSelectionSingleDate, canSelectDate dateComponents: DateComponents?) -> Bool {
+            return true
         }
     }
 }

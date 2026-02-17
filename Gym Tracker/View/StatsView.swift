@@ -15,8 +15,10 @@ struct StatsView: View {
     @Query(sort: \WorkoutStat.workoutName, order: .reverse)
     private var allStats: [WorkoutStat]
     @AppStorage("lastSelectedWorkout") private var selectedWorkoutName: String = "Bench Press"
+    @AppStorage("lastSelectedWorkoutWeight") private var selectedWorkoutWeight: String = "Bench Press"
     @Environment(\.modelContext) var modelContext
     @State private var showSelectionSheet = false
+    @State private var showWeightSelectionSheet = false
     
     @Query(sort: [SortDescriptor(\MonthlyWorkout.year, order: .forward), SortDescriptor(\MonthlyWorkout.month, order: .forward)]) 
     private var monthlyWorkouts: [MonthlyWorkout]
@@ -39,6 +41,11 @@ struct StatsView: View {
     
     private var selectedStat: WorkoutStat? {
         let option = allStats.first(where: { $0.sourceWorkout.name == selectedWorkoutName })
+        return option
+    }
+
+    private var selectedWeightStat: WorkoutStat? {
+        let option = allStats.first(where: { $0.sourceWorkout.name == selectedWorkoutWeight })
         return option
     }
     
@@ -87,6 +94,36 @@ struct StatsView: View {
                             // Pass the specific stat object to the chart
                             if let stat = selectedStat {
                                 oneRepMaxLineChart(stat: stat)
+                            } else {
+                                Text("No data available")
+                                    .foregroundStyle(.secondary)
+                                    .frame(height: 150)
+                            }
+                        }
+                    }
+                    
+                    chartCard(title: "Max Weight Progress") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            
+                            Button {
+                                showWeightSelectionSheet = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(selectedWorkoutWeight)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    
+                                    
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            
+
+                            // Pass the specific stat object to the chart
+                            if let stat = selectedWeightStat {
+                                maxWeightLineChart(stat: stat)
                             } else {
                                 Text("No data available")
                                     .foregroundStyle(.secondary)
@@ -144,6 +181,12 @@ struct StatsView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
+             .sheet(isPresented: $showWeightSelectionSheet) {
+                 NavigationStack {
+                     WorkoutSelectionView(selectedOption: $selectedWorkoutWeight)
+                 }
+                 .presentationDetents([.medium, .large])
+             }
         }
     }
    
@@ -171,55 +214,40 @@ struct StatsView: View {
     }
 
     private func oneRepMaxLineChart(stat: WorkoutStat) -> some View {
-        
         let data = stat.oneRepMaxHistory
+        let maxRMValue = stat.maxOneRepStat?.oneRepMaxValue ?? 0
+        
+        return NavigationLink(destination: DetailedProgressView(
+            title: "1RM History: \(stat.workoutName)",
+            data: data,
+            prLabel: "Max 1RM",
+            prValue: maxRMValue
+        )) {
+            // Mini Chart: Latest 8 only, Label on last only
+            MetricLineChart(data: data, prLabel: "M 1R", prValue: maxRMValue, isDetailed: false)
+                .frame(height: 150)
+                // Disable hit testing on the chart itself so the NavLink handles the tap
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle()) // Removes blue link color
+    }
 
+    private func maxWeightLineChart(stat: WorkoutStat) -> some View {
+        let data = stat.maxWeightHistory
         let maxWeightValue = stat.maxWeightStat?.weightValue ?? 0
         
-        return Chart {
-            ForEach(data, id: \.date) { item in
-                LineMark(
-                    x: .value("Date", item.date),
-                    y: .value("Weight", item.max)
-                )
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(.emerald500)
-             
-                PointMark(
-                    x: .value("Date", item.date),
-                    y: .value("Weight", item.max)
-                )
-                .foregroundStyle(.emerald500)
-                .annotation(position: .top, spacing: 8) {
-                    // Only show label for the last/current max
-                    if item.date == data.last?.date {
-                        Text("\(item.max, specifier: "%.1f")")
-                            .font(.system(.caption, design: .rounded).bold())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            
-            if maxWeightValue > 0 {
-                RuleMark(
-                    y: .value("Max Weight", maxWeightValue)
-                )
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5])) // Dashed line
-                .foregroundStyle(.blue.opacity(0.5))
-                
-                .annotation(position: .top, alignment: .leading) {
-                    Text("PR: \(maxWeightValue, specifier: "%.0f")")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.blue)
-                        .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
-                                            .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
-                                            .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
-                        .padding(2)
-                }
-            }
+        return NavigationLink(destination: DetailedProgressView(
+            title: "Max Weight History: \(stat.workoutName)",
+            data: data,
+            prLabel: "PR",
+            prValue: maxWeightValue
+        )) {
+            // Mini Chart: Latest 8 only, Label on last only
+            MetricLineChart(data: data, prLabel: "PR", prValue: maxWeightValue, isDetailed: false)
+                .frame(height: 150)
+                .contentShape(Rectangle())
         }
-        .frame(height: 150)
-        .chartYScale(range: .plotDimension(padding: 20))
+        .buttonStyle(PlainButtonStyle())
     }
    
     // MARK: - Helper View Components (Unchanged)
@@ -342,6 +370,119 @@ struct FullFrequencyView: View {
 }
 
 
+
+struct MetricLineChart: View {
+    let data: [maxEntries]
+    let prLabel: String?
+    let prValue: Double?
+    let isDetailed: Bool
+    
+    // 1. Prepare the data: Slice it for mini view, keep it full for detailed view
+    private var displayData: [maxEntries] {
+        let sorted = data.sorted { $0.date < $1.date }
+        if isDetailed {
+            return sorted
+        } else {
+            return Array(sorted.suffix(8)) // Only show latest 8 on dashboard
+        }
+    }
+    
+    var body: some View {
+        Chart {
+            ForEach(displayData, id: \.date) { item in
+                // Draw the Line
+                LineMark(
+                    x: .value("Date", item.date),
+                    y: .value("Weight", item.max)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(.emerald500)
+                
+                // Draw the Points (Dots)
+                PointMark(
+                    x: .value("Date", item.date),
+                    y: .value("Weight", item.max)
+                )
+                .foregroundStyle(.emerald500)
+                // 2. The Logic: Conditionally show the text label
+                .annotation(position: .top, spacing: 8) {
+                    if shouldShowLabel(for: item) {
+                        Text("\(item.max, specifier: "%.1f")")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(2)
+                            .background(Color(.systemBackground).opacity(0.8))
+                    }
+                    
+                }
+            }
+            
+            // Draw PR Line (Only if it exists)
+            if let pr = prValue, pr > 0 {
+                RuleMark(y: .value(prLabel ?? "PR", pr))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5])) // Dashed line
+                .foregroundStyle(.blue.opacity(0.5))
+                
+                .annotation(
+                    position: isDetailed ? .top : .top,
+                    alignment: isDetailed ? .trailing : .leading,
+                    spacing: isDetailed ? 10 : 0
+                ) {
+                    Text("\(prLabel ?? "PR"): \(pr, specifier: "%.1f")")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.blue)
+                        .padding(4)
+                        .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
+                        .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
+                        .shadow(color: Color(.systemBackground), radius: 1, x: 0, y: 0)
+                        
+                        // In Detailed View, move it completely outside/above the chart
+                        // In Mini View, keep it tucked inside
+                        .offset(y: isDetailed ? -20 : 0)
+                }
+            }
+        }
+        // Hide the legend generated by the symbols
+        .chartLegend(.hidden)
+        .chartYScale(range: .plotDimension(padding: 20))
+    }
+    
+    // Helper function to keep the view body clean
+    private func shouldShowLabel(for item: maxEntries) -> Bool {
+        // Condition A: If it's the detailed view, show EVERYTHING.
+        if isDetailed { return true }
+        
+        // Condition B: If it's the mini view, only show the LAST item.
+        // Note: We compare dates because objects might be distinct copies
+        return item.date == displayData.last?.date
+    }
+}
+
+// The Destination View when you click the chart
+struct DetailedProgressView: View {
+    let title: String
+    let data: [maxEntries]
+    let prLabel: String?
+    let prValue: Double?
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView(.horizontal) {
+                // Use geometry.size.width instead of UIScreen.main.bounds.width
+                let dynamicWidth = max(geometry.size.width - 40, CGFloat(data.count * 50))
+                
+                VStack(alignment: .leading) {
+                    MetricLineChart(data: data, prLabel: prLabel, prValue: prValue, isDetailed: true)
+                        .frame(width: dynamicWidth, height: 300)
+                        .padding()
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGroupedBackground))
+    }
+}
 
 
 //#Preview {
